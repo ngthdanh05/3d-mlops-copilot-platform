@@ -2,6 +2,8 @@ import type { JsonValue, RunSummary } from '../lib/types'
 
 /** Scene coordinates of a plotted axis run from 0 to SCENE_SIZE. */
 export const SCENE_SIZE = 10
+/** Shifts plotted coordinates so the cube is centered on the world origin. */
+export const SCENE_CENTERING_OFFSET = -SCENE_SIZE / 2
 /** Where runs missing an axis key are placed, just outside the plotted range. */
 export const UNKNOWN_POSITION = -1.5
 

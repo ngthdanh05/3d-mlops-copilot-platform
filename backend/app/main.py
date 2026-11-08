@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.database import engine, init_db
-from app.routers import experiments, metrics, runs
+from app.routers import copilot, experiments, metrics, runs
 from app.services.errors import ServiceError
 
 settings = get_settings()
@@ -45,6 +45,7 @@ async def service_error_handler(_request: Request, exc: ServiceError) -> JSONRes
 app.include_router(experiments.router)
 app.include_router(runs.router)
 app.include_router(metrics.router)
+app.include_router(copilot.router)
 
 
 @app.get("/api/health", tags=["health"])

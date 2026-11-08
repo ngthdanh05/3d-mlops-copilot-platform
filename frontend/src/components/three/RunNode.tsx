@@ -2,6 +2,7 @@ import { Billboard, Html, useCursor } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
 import { memo, useState } from 'react'
 import type { RunStatus } from '../../lib/types'
+import { useCameraStore } from '../../store/useCameraStore'
 import { useRunStore } from '../../store/useRunStore'
 import type { RunNodeLayout } from '../../utils/coordinate-mapper'
 
@@ -45,13 +46,17 @@ interface RunNodeProps {
 export const RunNode = memo(function RunNode({ node, color, radius }: RunNodeProps) {
   const { run, position, isOffGrid } = node
   const isSelected = useRunStore((state) => state.selectedRunId === run.id)
+  const isHighlighted = useRunStore((state) => state.highlightedRunIds.includes(run.id))
   const selectRun = useRunStore((state) => state.selectRun)
+  const setCameraTarget = useCameraStore((state) => state.setTarget)
   const [isHovered, setHovered] = useState(false)
   useCursor(isHovered)
 
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation()
-    if (event.delta <= CLICK_DRAG_TOLERANCE) selectRun(run.id)
+    if (event.delta > CLICK_DRAG_TOLERANCE) return
+    selectRun(run.id)
+    setCameraTarget(run.id)
   }
 
   return (
@@ -61,7 +66,7 @@ export const RunNode = memo(function RunNode({ node, color, radius }: RunNodePro
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={isSelected ? 0.8 : 0.15}
+          emissiveIntensity={isSelected || isHighlighted ? 0.8 : 0.15}
           transparent={isOffGrid}
           opacity={isOffGrid ? 0.3 : 1}
         />
@@ -83,6 +88,14 @@ export const RunNode = memo(function RunNode({ node, color, radius }: RunNodePro
           <mesh>
             <ringGeometry args={[radius + 0.14, radius + 0.21, 40]} />
             <meshBasicMaterial color="#ffffff" />
+          </mesh>
+        </Billboard>
+      )}
+      {isHighlighted && (
+        <Billboard>
+          <mesh>
+            <ringGeometry args={[radius + 0.27, radius + 0.36, 40]} />
+            <meshBasicMaterial color="#fb923c" />
           </mesh>
         </Billboard>
       )}

@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import Experiment, Metric, Run, RunStatus
-from app.schemas import ExperimentCreate, MetricCreate, RunCreate, RunUpdate
+from app.schemas import ExperimentCreate, MetricCreate, RankingMetric, RunCreate, RunUpdate
 from app.services.errors import ConflictError, NotFoundError
+
+_LOWER_IS_BETTER = {"loss", "val_loss"}
 
 # ── Experiments ───────────────────────────────────────────────────────────────
 
@@ -65,6 +67,28 @@ async def get_run(db: AsyncSession, run_id: int, *, with_metrics: bool = False) 
     if run is None:
         raise NotFoundError(f"Run {run_id} not found")
     return run
+
+
+async def find_best_runs(
+    db: AsyncSession,
+    metric: RankingMetric,
+    *,
+    experiment_id: int | None = None,
+    top_k: int = 1,
+) -> list[tuple[Run, float]]:
+    """Completed runs ranked by their last-epoch `metric`, best first, with the value.
+
+    Running and failed runs are skipped: their last epoch is not a final result.
+    """
+    ranked: list[tuple[Run, float]] = []
+    for run in await list_runs(db, experiment_id):
+        if run.status is not RunStatus.COMPLETED or not run.metrics:
+            continue
+        value = getattr(max(run.metrics, key=lambda m: m.epoch), metric)
+        if value is not None:
+            ranked.append((run, value))
+    ranked.sort(key=lambda pair: pair[1], reverse=metric not in _LOWER_IS_BETTER)
+    return ranked[:top_k]
 
 
 async def update_run(db: AsyncSession, run_id: int, data: RunUpdate) -> Run:

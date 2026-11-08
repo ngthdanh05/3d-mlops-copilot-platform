@@ -372,6 +372,7 @@ Quy tắc:
 │   │   │       ├── llm_client.py      # Wrapper LLM, đổi nhà cung cấp tại đây
 │   │   │       ├── query_tools.py     # Tool truy vấn, gọi service layer
 │   │   │       ├── ui_tools.py        # Tool điều khiển giao diện (actions)
+│   │   │       ├── tool_base.py       # Kiểu dùng chung cho các tool
 │   │   │       └── prompts.py         # System prompt
 │   │   │
 │   │   └── utils/
@@ -428,8 +429,7 @@ Quy tắc:
 │   │   │   └── copilot/
 │   │   │       ├── ChatPanel.tsx      # AI chat container
 │   │   │       ├── ChatMessage.tsx    # Single message bubble
-│   │   │       ├── ChatInput.tsx      # Input + send button
-│   │   │       └── ActionHandler.tsx  # Process AI response actions
+│   │   │       └── ChatInput.tsx      # Input + send button
 │   │   │
 │   │   ├── store/
 │   │   │   ├── useRunStore.ts         # Zustand: runs[], selectedRunId
@@ -618,7 +618,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Empty state khi chưa select run
   - **DoD:** Click node → panel hiển thị đúng data; chart renders epoch timeline
 
-- [ ] **P2-T10: Camera Fly-to Animation**
+- [x] **P2-T10: Camera Fly-to Animation**
   - `<CameraController>`: subscribe `useCameraStore.cameraTarget`
   - Khi target thay đổi: animate camera position → offset từ node position
   - Sử dụng `@react-spring/three` hoặc manual lerp trong `useFrame`
@@ -642,29 +642,29 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [ ] **P3-T01: LLM Client Setup**
+- [ ] **P3-T01: LLM Client Setup** (đã có interface và bản giả lập, chưa nối LLM thật)
   - Chốt nhà cung cấp, cài SDK tương ứng
   - Tạo `config.py`: load API key từ `.env` (`LLM_API_KEY`, `LLM_MODEL`)
   - Tạo `llm_client.py`: một interface hỗ trợ tool calling, kèm bản giả (fake) để test không tốn API
   - **DoD:** Gọi LLM với một tool mẫu → nhận được tool call đúng tên và tham số
 
-- [ ] **P3-T02: Query Tools**
+- [ ] **P3-T02: Query Tools** (mới có `find_best_runs`)
   - `query_tools.py`: `list_experiments`, `find_best_runs`, `get_run`, `compare_runs`, `detect_overfitting`
   - Tool gọi service layer, không truy vấn database trực tiếp
   - `detect_overfitting`: tính khoảng cách train/val qua các epoch bằng code
   - **DoD:** Mỗi tool có unit test với dữ liệu seed; run không tồn tại trả lỗi rõ ràng cho LLM
 
-- [ ] **P3-T03: UI Action Tools**
+- [x] **P3-T03: UI Action Tools**
   - `ui_tools.py`: `highlight_runs`, `focus_camera`, `open_inspector`
   - Tool chỉ ghi nhận action, không chạm database ngoài việc kiểm tra `run_id` tồn tại
   - **DoD:** `run_id` không tồn tại bị loại khỏi `actions`; có unit test
 
-- [ ] **P3-T04: System Prompt & Schemas**
+- [x] **P3-T04: System Prompt & Schemas**
   - `prompts.py`: vai trò của trợ lý, yêu cầu mọi con số phải lấy từ tool, ngôn ngữ trả lời
   - `schemas/copilot.py`: `ChatRequest`, `ChatResponse`, các kiểu `Action`
   - **DoD:** Schema khớp ví dụ ở mục 2.3; OpenAPI hiển thị đúng
 
-- [ ] **P3-T05: Copilot API Endpoint**
+- [ ] **P3-T05: Copilot API Endpoint** (endpoint đã chạy, chờ LLM thật và đủ tool)
   - `POST /api/copilot/chat`:
     - Request: `{ "message": str, "experiment_id": int (optional) }`
     - Flow: gửi câu hỏi + danh sách tool → chạy tool call → lặp đến khi LLM trả lời (có giới hạn số vòng) → gom actions
@@ -672,22 +672,22 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Error handling: LLM timeout hoặc lỗi → thông báo thân thiện, không trả 500 thô
   - **DoD:** 3 loại câu hỏi (best run, compare, diagnose) trả lời đúng số liệu trong database
 
-- [ ] **P3-T06: Chat Panel UI**
+- [ ] **P3-T06: Chat Panel UI** (đã chat được, chưa render Markdown)
   - `<ChatPanel>`: message list + input
   - `<ChatMessage>`: render Markdown (react-markdown), differentiate user/AI bubbles
   - `<ChatInput>`: text input + send button + loading indicator
   - `useChatStore`: `messages[]`, `isLoading`, `sendMessage()`
   - **DoD:** Type message → send → loading spinner → AI response rendered
 
-- [ ] **P3-T07: Action Handler (Frontend)**
-  - `<ActionHandler>`: subscribe `useChatStore` → khi AI response có actions:
+- [x] **P3-T07: Action Handler (Frontend)**
+  - `applyActions` trong `hooks/useCopilot.ts`: khi AI response có actions:
     - `highlight_runs`: dispatch `useRunStore.highlightRuns(run_ids)`
     - `focus_camera`: dispatch `useCameraStore.setTarget(run_id)`
     - `open_inspector`: dispatch `useRunStore.selectRun(run_id)`
   - RunNode listens: nếu highlighted → add orange emissive ring
   - **DoD:** AI says "best run is run-003" → node run-003 glows + camera flies to it
 
-- [ ] **P3-T08: Copilot Engine Tests**
+- [ ] **P3-T08: Copilot Engine Tests** (đã có test engine, còn bộ câu hỏi kiểm tra)
   - Unit tests cho query tools, UI tools và vòng lặp engine
   - Integration test: fake LLM trả tool call → kiểm tra toàn bộ pipeline
   - Bộ câu hỏi kiểm tra độ chính xác của AI: đối chiếu số trong câu trả lời với database
