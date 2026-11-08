@@ -131,7 +131,7 @@ export const RunNode = memo(function RunNode({ node, axisKeys, color, radius }: 
           color={color}
           emissive={color}
           emissiveIntensity={isSelected || isHighlighted ? 0.8 : 0.15}
-          transparent={opacity < 1}
+          transparent // constant: three.js does not recompile when this flips at runtime
           opacity={opacity}
           depthWrite={opacity === 1}
         />
