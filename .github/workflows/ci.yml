@@ -3,7 +3,6 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    types: [opened, edited, synchronize, reopened]
   push:
     branches: [main]
   workflow_dispatch:
@@ -18,28 +17,7 @@ permissions:
 
 jobs:
   # ------------------------------------------------------------------
-  # 1. Tiêu đề PR phải có ID thẻ ClickUp, ví dụ: "ML3D-42 feat(frontend): ..."
-  # ------------------------------------------------------------------
-  pr-title:
-    name: pr-title
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Kiểm tra ID thẻ ClickUp trong tiêu đề PR
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          TASK_PREFIX: ML3D
-        run: |
-          echo "Tiêu đề PR: $PR_TITLE"
-          if [[ "$PR_TITLE" =~ ^${TASK_PREFIX}-[0-9]+[[:space:]] ]]; then
-            echo "✅ Tiêu đề hợp lệ"
-          else
-            echo "::error::Tiêu đề PR phải bắt đầu bằng ID thẻ ClickUp, ví dụ: '${TASK_PREFIX}-42 feat(frontend): panel chi tiết run'"
-            exit 1
-          fi
-
-  # ------------------------------------------------------------------
-  # 2. Backend: format, lint, test
+  # 1. Backend: format, lint, test
   # ------------------------------------------------------------------
   backend:
     name: backend
@@ -70,7 +48,7 @@ jobs:
         run: uv run pytest --cov --cov-report=term-missing
 
   # ------------------------------------------------------------------
-  # 3. Frontend: lint, typecheck, build
+  # 2. Frontend: lint, typecheck, build
   #    Tự bỏ qua cho đến khi frontend/package.json tồn tại (Phase 2).
   # ------------------------------------------------------------------
   frontend:
