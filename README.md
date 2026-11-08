@@ -77,7 +77,7 @@ Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đ�
 | AI điều khiển giao diện: làm nổi bật run, bay camera | 3 | Must |
 | AI tóm tắt experiment, gợi ý siêu tham số | 3 | Should |
 | Endpoint xoá experiment / run | 2 | Should |
-| Xem run của nhiều experiment cùng lúc | 2 | Should |
+| Giao diện xem run của nhiều experiment cùng lúc (API đã hỗ trợ) | 2 | Should |
 | Tự cập nhật run đang chạy (polling) | 4 | Should |
 | Chế độ giảm chiều (PCA) khi có nhiều hơn 3 siêu tham số | 4 | Could |
 | Đóng gói client ghi log thành thư viện `pip install` | 4 | Could |
@@ -140,12 +140,13 @@ Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số 
 |---|---|---|
 | Trục X | `learning_rate` | **Thang log** (giá trị thường trải từ 1e-5 đến 1e-1) |
 | Trục Y | `batch_size` | Thang log cơ số 2 |
-| Trục Z | Siêu tham số thứ ba có trong dữ liệu (vd `hidden_layers`, `epochs`) | |
+| Trục Z | Siêu tham số dạng số còn lại: ưu tiên `dropout`, rồi `epochs`, rồi các key khác | Lấy key đầu tiên có ≥ 2 giá trị khác nhau. Không có key nào thì Z phẳng |
 | Màu | `final_val_accuracy` (hoặc `final_accuracy` nếu không có) | Thang màu liên tục, có chú giải |
 | Kích thước | `final_val_loss` | Loss cao → cầu nhỏ |
 | Viền / icon | Trạng thái | ● hoàn thành · ◐ đang chạy · ✕ lỗi |
 
-- Người dùng **chọn được trục** từ mọi key trong `hyperparams` và mọi metric cuối.
+- Người dùng **chọn được trục** từ mọi key **dạng số** trong `hyperparams` và mọi metric cuối.
+- Key không phải số (`optimizer` là chuỗi, `hidden_layers` là danh sách) chưa làm trục được ở PoC, nhưng vẫn hiện trong Inspector Panel.
 - Run thiếu một siêu tham số đang dùng làm trục được đặt ở mặt phẳng "không xác định" và vẽ mờ.
 - Không dùng epoch, accuracy và loss làm 3 trục cùng lúc: accuracy và loss gần như tỉ lệ nghịch nên các điểm sẽ dồn trên một đường, còn số epoch thường giống nhau giữa các run.
 - Mục tiêu hiệu năng: ≥ 200 node ở 60 fps (dùng instanced mesh).
@@ -334,7 +335,7 @@ Tất cả endpoint có tiền tố `/api`. Tài liệu đầy đủ, có thể 
 | `GET` | `/api/experiments` | Danh sách experiment | 200 |
 | `GET` | `/api/experiments/{id}` | Chi tiết experiment | 200 · 404 |
 | `POST` | `/api/runs` | Tạo run (trạng thái ban đầu `running`) | 201 · 404 · 409 trùng tên run |
-| `GET` | `/api/runs?experiment_id=X` | Danh sách run kèm chỉ số epoch cuối | 200 · 404 |
+| `GET` | `/api/runs` | Danh sách run kèm chỉ số epoch cuối. Thêm `?experiment_id=X` để lọc, bỏ trống để lấy mọi experiment | 200 · 404 |
 | `GET` | `/api/runs/{id}` | Chi tiết run kèm toàn bộ metrics theo epoch | 200 · 404 |
 | `PUT` | `/api/runs/{id}` | Cập nhật trạng thái: `completed` / `failed` / `running` | 200 · 404 · 409 |
 | `POST` | `/api/runs/{id}/metrics` | Ghi metrics cho 1 epoch | 201 · 404 · 409 epoch đã ghi |
@@ -343,8 +344,7 @@ Tất cả endpoint có tiền tố `/api`. Tài liệu đầy đủ, có thể 
 Dữ liệu gửi lên sai định dạng luôn trả về **422**, kèm thông báo chỉ rõ field nào sai.
 
 > [!NOTE]
-> - `GET /api/runs` hiện **bắt buộc** có `experiment_id`. Dự kiến cho phép bỏ trống để xem run của mọi experiment (Phase 2).
-> - Chưa có endpoint `DELETE`. Dự kiến bổ sung ở Phase 2.
+> Chưa có endpoint `DELETE`. Dự kiến bổ sung ở Phase 2.
 
 ### Ví dụ với `curl`
 
@@ -484,7 +484,7 @@ Chi tiết từng task: [`docs/PLAN.md`](docs/PLAN.md) và bảng Sprint trên C
 | Phase | Nội dung | Nhóm phụ trách | Trạng thái |
 |---|---|---|---|
 | 1 | **Nền tảng Backend & MLOps:** API tracking, database, validation, script demo, dữ liệu mẫu, kiểm thử | Backend | ✅ Xong |
-| 2 | **Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D theo [thiết kế](#thiết-kế-không-gian-3d), chọn trục, click/hover, Inspector Panel, camera bay tới node. Backend bổ sung `DELETE` và lọc run không cần `experiment_id` | Web3D, Backend | ⏳ |
+| 2 | **Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D theo [thiết kế](#thiết-kế-không-gian-3d), chọn trục, click/hover, Inspector Panel, camera bay tới node. Backend bổ sung `DELETE` | Web3D, Backend | ⏳ |
 | 3 | **AI Copilot:** kết nối LLM, các tool truy vấn và tool điều khiển giao diện theo [thiết kế](#thiết-kế-trợ-lý-ai), bộ câu hỏi kiểm thử độ chính xác | AI, Backend | ⏳ |
 | 4 | **Đồng bộ & hoàn thiện:** đồng bộ 3 khung, sidebar, polling run đang chạy, tối ưu hiệu năng (≥ 200 node @ 60 fps), dark mode | Web3D | ⏳ |
 | 5 | **Kiểm thử & demo:** smoke test end-to-end, benchmark, tài liệu demo, báo cáo | Data-Test, cả nhóm | ⏳ |
