@@ -540,19 +540,19 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [ ] **P2-T01: Khởi tạo Frontend Project**
+- [x] **P2-T01: Khởi tạo Frontend Project**
   - `pnpm create vite frontend --template react-ts` (Vite + React SPA, TypeScript)
   - Install: `three`, `@react-three/fiber`, `@react-three/drei`, `zustand`, `swr`
   - Setup Tailwind CSS: `tailwind.config.js`, `postcss.config.js`, `src/index.css`
   - Cấu hình API reverse proxy trong `vite.config.ts` (`/api` -> `http://localhost:8000`)
   - **DoD:** `pnpm dev` → Vite dev server chạy tại `localhost:5173`; khởi động tức thì, blank page renders
 
-- [ ] **P2-T02: TypeScript Types & API Client**
+- [x] **P2-T02: TypeScript Types & API Client**
   - Định nghĩa `types.ts`: `Run`, `Metric`, `Experiment`, `ChatMessage`, `CopilotResponse`
   - Tạo `lib/api.ts`: base URL config, `fetchRuns()`, `fetchRunDetail(id)`
   - **DoD:** `useRuns()` hook trả về data từ backend (proxy qua `vite.config.ts` server.proxy)
 
-- [ ] **P2-T03: Layout Workspace (3-Panel)**
+- [x] **P2-T03: Layout Workspace (3-Panel)**
   - Tạo `Workspace.tsx`: CSS Grid / Flexbox layout
     ```
     ┌──────────┬────────────────────────┬──────────────┐
