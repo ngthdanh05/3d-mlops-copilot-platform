@@ -11,11 +11,13 @@ Examples (backend must be running: `uv run uvicorn app.main:app`):
   uv run python scripts/train_mnist_demo.py --sweep
   uv run python scripts/train_mnist_demo.py --lr 0.001 --batch-size 32 --epochs 15
   uv run python scripts/train_mnist_demo.py --dataset mnist --mnist-samples 10000 --sweep
+  uv run python scripts/train_mnist_demo.py --dataset mnist --random-search 30
 """
 
 from __future__ import annotations
 
 import argparse
+import random
 import sys
 import time
 import warnings
@@ -29,7 +31,14 @@ from sklearn.metrics import log_loss
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 
-EXPERIMENT_NAMES = {"digits": "Digits-MLP-demo", "mnist": "MNIST-MLP-demo"}
+EXPERIMENT_NAMES = {"digits": "real-digits-mlp", "mnist": "real-mnist-mlp"}
+
+# Random search space. Epochs stay fixed so runs are comparable, which leaves alpha as the
+# 3D Z axis. Its values are evenly spread because that axis is linear.
+SEARCH_EPOCHS = 15
+SEARCH_BATCH_SIZES = (16, 32, 64, 128, 256)
+SEARCH_HIDDEN_LAYERS = ((64,), (128,), (256,), (128, 64), (256, 128))
+SEARCH_ALPHAS = (0.0, 1.0, 2.0, 5.0, 10.0)
 
 
 @dataclass(frozen=True)
@@ -70,6 +79,48 @@ SWEEP: list[TrainConfig] = [
 ]
 
 
+def random_search(n_runs: int, seed: int) -> list[TrainConfig]:
+    """`n_runs` sampled configs plus deliberately bad ones. Same seed, same configs."""
+    rng = random.Random(seed)
+    sampled = [
+        TrainConfig(
+            learning_rate=float(f"{10 ** rng.uniform(-4, -1):.2g}"),
+            batch_size=rng.choice(SEARCH_BATCH_SIZES),
+            epochs=SEARCH_EPOCHS,
+            hidden_layers=rng.choice(SEARCH_HIDDEN_LAYERS),
+            optimizer=rng.choice(("adam", "adam", "sgd")),
+            alpha=rng.choice(SEARCH_ALPHAS),
+            seed=seed,
+        )
+        for _ in range(n_runs)
+    ]
+    overfitting = [
+        TrainConfig(
+            learning_rate=3e-3,
+            batch_size=batch_size,
+            epochs=SEARCH_EPOCHS,
+            hidden_layers=(256, 256),
+            alpha=0.0,
+            train_size=200,
+            seed=seed,
+        )
+        for batch_size in (16, 32, 64)
+    ]
+    unstable = [
+        TrainConfig(
+            learning_rate=learning_rate,
+            batch_size=32,
+            epochs=SEARCH_EPOCHS,
+            hidden_layers=(64,),
+            optimizer="sgd",
+            alpha=1.0,
+            seed=seed,
+        )
+        for learning_rate in (0.5, 1.0)
+    ]
+    return sampled + overfitting + unstable
+
+
 @dataclass
 class Dataset:
     x_train: np.ndarray
@@ -88,7 +139,10 @@ def load_dataset(name: str, mnist_samples: int, seed: int) -> Dataset:
         x = x / 16.0
     else:
         print("Loading MNIST from OpenML (cached after the first download)...")
-        x, y = fetch_openml("mnist_784", version=1, return_X_y=True, as_frame=False)
+        # parser="liac-arff": the default parser would require pandas.
+        x, y = fetch_openml(
+            "mnist_784", version=1, return_X_y=True, as_frame=False, parser="liac-arff"
+        )
         x, y = x[:mnist_samples] / 255.0, y[:mnist_samples].astype(int)
     x_train, x_val, y_train, y_val = train_test_split(
         x, y, test_size=0.2, stratify=y, random_state=seed
@@ -152,6 +206,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--mnist-samples", type=int, default=10_000, help="subset size for mnist")
     p.add_argument("--experiment", help="experiment name (default depends on dataset)")
     p.add_argument("--sweep", action="store_true", help=f"run {len(SWEEP)} preset configs")
+    p.add_argument(
+        "--random-search",
+        type=int,
+        metavar="N",
+        help="N reproducible random configs plus 5 deliberately bad ones",
+    )
     p.add_argument("--run-name", help="defaults to the next free run-NNN")
     p.add_argument("--lr", type=float, default=default.learning_rate)
     p.add_argument("--batch-size", type=int, default=default.batch_size)
@@ -166,7 +226,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if args.sweep:
+    if args.random_search:
+        configs = random_search(args.random_search, args.seed)
+    elif args.sweep:
         configs = [replace(cfg, seed=args.seed) for cfg in SWEEP]
     else:
         configs = [
@@ -196,10 +258,13 @@ def main(argv: list[str] | None = None) -> int:
             name, f"scikit-learn MLPClassifier on the '{args.dataset}' dataset (demo)"
         )
         print(f"Experiment #{experiment['id']} '{experiment['name']}'")
+        if args.random_search and client.list_runs(experiment["id"]):
+            print("This experiment already has runs. Use --experiment to start a new one.")
+            return 0
         for cfg in configs:
             train_and_log(
                 client, experiment["id"], cfg, data, args.dataset,
-                run_name=None if args.sweep else args.run_name,
+                run_name=args.run_name if len(configs) == 1 else None,
             )  # fmt: skip
 
         runs = client.list_runs(experiment["id"])

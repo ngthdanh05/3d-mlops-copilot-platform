@@ -299,10 +299,10 @@ cd backend
 uv run python -m app.utils.seed_data
 ```
 
-Tạo 2 experiment là `MNIST-CNN-v1` và `CIFAR10-ResNet18`, mỗi cái 15 run với đường cong học tập trông như thật: có run tốt, run overfit, run bị phân kỳ rồi lỗi, run đang chạy dở.
+Tạo 2 experiment là `mock-mnist-cnn` và `mock-cifar10-resnet18`, mỗi cái 15 run với đường cong học tập trông như thật: có run tốt, run overfit, run bị phân kỳ rồi lỗi, run đang chạy dở.
 
 > [!NOTE]
-> Đây là dữ liệu **giả lập**. Tên experiment chỉ mô phỏng bối cảnh thực tế, không có mô hình CNN hay ResNet nào được huấn luyện thật.
+> Đây là dữ liệu **giả lập**, dùng để phát triển giao diện và test. Tiền tố `mock-` nghĩa là không có mô hình nào được huấn luyện thật. Dữ liệu huấn luyện thật có tiền tố `real-`.
 
 | Tham số | Ý nghĩa |
 |---|---|
@@ -313,6 +313,14 @@ Tạo 2 experiment là `MNIST-CNN-v1` và `CIFAR10-ResNet18`, mỗi cái 15 run 
 Chạy lại nhiều lần không bị trùng: experiment mẫu đã có sẽ được bỏ qua.
 
 ### Cách 2: huấn luyện thật (cần server đang chạy)
+
+Bộ thử chuẩn cho demo là 35 run trên MNIST, gồm 30 cấu hình ngẫu nhiên và 5 cấu hình cố ý xấu. Cùng `--seed` sẽ cho cùng bộ cấu hình, nên cả nhóm tái tạo được dữ liệu mà không cần chia sẻ file database. Lệnh này tự bỏ qua nếu experiment đã có run.
+
+```bash
+uv run python scripts/train_mnist_demo.py --dataset mnist --random-search 30
+```
+
+Một bộ thử nhỏ hơn, chạy nhanh:
 
 ```bash
 cd backend
