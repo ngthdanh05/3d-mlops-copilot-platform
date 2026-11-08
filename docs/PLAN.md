@@ -2,7 +2,10 @@
 
 > **Nền tảng quản lý thực nghiệm học máy trong không gian 3D tích hợp trợ lý AI**
 >
-> Version: `1.0.0-draft` · Created: 2026-11-06 · Author: Principal System Architect
+> Version: `1.1.0-draft` · Created: 2026-11-06 · Updated: 2026-11-08 · Author: Principal System Architect
+>
+> Bản 1.1 thống nhất với README: không gian 3D theo siêu tham số và trợ lý AI dùng tool calling.
+> Quy trình làm việc nhóm nằm ở `CONTRIBUTING.md`. Công việc thực tế được theo dõi trên ClickUp.
 
 ---
 
@@ -30,7 +33,7 @@ Xây dựng một **Proof of Concept** hoạt động end-to-end, cho phép:
 | 4   | **Synchronize** trạng thái xuyên suốt     | Click node → panel update; AI trả lời → camera focus tới node tương ứng |
 
 > [!IMPORTANT]
-> Phạm vi PoC **không** bao gồm: xác thực người dùng, multi-tenant, CI/CD pipeline tích hợp, model registry, hoặc deployment pipeline. Các tính năng này thuộc roadmap post-MVP.
+> Phạm vi PoC **không** bao gồm: xác thực người dùng, multi-tenant, model registry, hoặc deployment pipeline. Các tính năng này thuộc roadmap post-MVP. CI (lint và test cho mỗi PR) đã nằm trong phạm vi.
 
 ### 1.2 Kiến trúc hệ thống tổng quan
 
@@ -68,11 +71,11 @@ Xây dựng một **Proof of Concept** hoạt động end-to-end, cho phép:
 │  ┌─────────────────────────────────────┐    ┌──────────────────────────────┐  │
 │  │         SQLite Database             │    │      AI Copilot Engine       │  │
 │  │  • experiments table                │    │                              │  │
-│  │  • runs table                       │◄───┤  • Context Builder           │  │
-│  │  • metrics table                    │    │  • Prompt Template Engine    │  │
-│  │  • hyperparams table               │    │  • LLM API Client            │  │
-│  └─────────────────────────────────────┘    │  • Response Parser           │  │
-│                                             │    (action extraction)       │  │
+│  │  • runs table                       │◄───┤  • Query tools (service)     │  │
+│  │  • metrics table                    │    │  • System prompt             │  │
+│  │  (hyperparams: cột JSON của runs)   │    │  • LLM client (tool calling) │  │
+│  └─────────────────────────────────────┘    │  • UI action collector       │  │
+│                                             │    (actions cho frontend)    │  │
 │                                             └──────────────┬───────────────┘  │
 │                                                            │                 │
 └────────────────────────────────────────────────────────────┼─────────────────┘
@@ -94,8 +97,8 @@ sequenceDiagram (mô tả text)
 [Frontend]     ──renders──────────► [3D Canvas: Node spheres]
 [User]         ──click node───────► [Zustand] ──update──► [Inspector Panel]
 [User]         ──chat message─────► [Frontend] ──POST /api/copilot/chat──► [FastAPI]
-[FastAPI]      ──build context────► [LLM API] ──response──► [FastAPI]
-[FastAPI]      ──parsed response──► [Frontend] ──camera focus + chat bubble──► [UI]
+[FastAPI]      ──câu hỏi + tools──► [LLM API] ──tool calls──► [Service layer] ──kết quả──► [LLM API]
+[FastAPI]      ──message + actions──► [Frontend] ──Zustand store──► [highlight + camera + chat bubble]
 ```
 
 ---
@@ -124,7 +127,7 @@ sequenceDiagram (mô tả text)
 │ experiment_id│ INTEGER  │ FK → experiments.id             │
 │ run_name     │ TEXT     │ "run-001"                      │
 │ status       │ TEXT     │ "running" | "completed" | "failed" │
-│ hyperparams  │ JSON     │ {"lr": 0.001, "batch_size": 32}│
+│ hyperparams  │ JSON     │ {"learning_rate": 0.001, ...}  │
 │ created_at   │ DATETIME │                                │
 │ finished_at  │ DATETIME │ nullable                       │
 └──────┬───────┴──────────┴────────────────────────────────┘
@@ -151,7 +154,7 @@ sequenceDiagram (mô tả text)
 | TR-01 | Tạo Experiment          | `POST /api/experiments` — tạo nhóm thực nghiệm                         |
 | TR-02 | Tạo Run                 | `POST /api/runs` — log hyperparams, gắn experiment_id                  |
 | TR-03 | Log Metrics theo Epoch  | `POST /api/runs/{id}/metrics` — ghi accuracy, loss, val_loss per epoch |
-| TR-04 | Lấy danh sách Runs      | `GET /api/runs?experiment_id=X` — trả về list runs + final metrics     |
+| TR-04 | Lấy danh sách Runs      | `GET /api/runs` (lọc bằng `?experiment_id=X`) — trả về list runs + final metrics |
 | TR-05 | Lấy chi tiết Run        | `GET /api/runs/{id}` — hyperparams + full metrics timeline             |
 | TR-06 | Cập nhật trạng thái Run | `PUT /api/runs/{id}` — đánh dấu "completed" / "failed"                 |
 
@@ -159,39 +162,46 @@ sequenceDiagram (mô tả text)
 
 #### Hệ tọa độ 3D (Coordinate Mapping)
 
+**Vị trí thể hiện đầu vào (siêu tham số), hình thức thể hiện kết quả.** Nhờ vậy người dùng thấy được vùng cấu hình nào cho kết quả tốt và vùng nào chưa được thử.
+
 ```
-        Y (Accuracy: 0→1)
+        Y (batch_size, log2)
         ▲
-        │       ● run-003 (best)
-        │      ╱
-        │     ╱
-        │    ● run-001
-        │   ╱
-        │  ● run-002
-        │ ╱
-        ├──────────────────────► X (Epoch: 1→N)
+        │       ● run tốt (màu sáng, cầu to)
+        │
+        │              ○ vùng chưa thử
+        │
+        │  ● run overfit
+        ├──────────────────────► X (learning_rate, log10)
        ╱
-      ╱  ● run-004 (high loss)
-     ╱
-    ▼
-    Z (Loss: 0→max)
+      ╱
+     ▼
+     Z (dropout / epochs / key số khác)
 ```
 
-| Trục | Ý nghĩa          | Ánh xạ                                               |
-| ---- | ---------------- | ---------------------------------------------------- |
-| X    | Epoch (final)    | `normalize(epoch, 0, max_epoch) * SCALE_X`           |
-| Y    | Accuracy (final) | `accuracy * SCALE_Y`                                 |
-| Z    | Loss (final)     | `normalize(loss, 0, max_loss) * SCALE_Z` (đảo chiều) |
+| Trục | Mặc định        | Ánh xạ                                                                       |
+| ---- | --------------- | ---------------------------------------------------------------------------- |
+| X    | `learning_rate` | `normalize(log10(value), min, max) * SCALE_X`                                |
+| Y    | `batch_size`    | `normalize(log2(value), min, max) * SCALE_Y`                                 |
+| Z    | Key số còn lại  | Ưu tiên `dropout`, rồi `epochs`, rồi key khác; lấy key đầu có ≥ 2 giá trị khác nhau. Không có thì Z phẳng |
+
+Quy tắc:
+
+- Người dùng chọn được trục từ mọi key dạng số trong `hyperparams` và mọi metric cuối.
+- Key không phải số (`optimizer`, `hidden_layers`) chưa làm trục được ở PoC, nhưng vẫn hiện trong Inspector Panel.
+- Run thiếu key đang dùng làm trục được đặt ở mặt phẳng "không xác định" và vẽ mờ.
+- Không dùng epoch, accuracy và loss làm 3 trục cùng lúc: accuracy và loss gần như tỉ lệ nghịch nên các điểm dồn trên một đường.
 
 #### Visual Encoding của Node
 
-| Thuộc tính         | Encoding                                                                        |
-| ------------------ | ------------------------------------------------------------------------------- |
-| **Vị trí (x,y,z)** | Epoch × Accuracy × Loss (cuối cùng của run)                                     |
-| **Màu sắc**        | Trạng thái: 🟢 `#22c55e` completed · 🟡 `#eab308` running · 🔴 `#ef4444` failed |
-| **Kích thước**     | Tỉ lệ thuận với `val_accuracy` (or `accuracy` nếu không có val)                 |
-| **Phát sáng**      | Emissive glow khi node đang được selected hoặc AI highlight                     |
-| **Label**          | Billboard text hiển thị `run_name` khi hover                                    |
+| Thuộc tính     | Encoding                                                              |
+| -------------- | --------------------------------------------------------------------- |
+| **Vị trí**     | Siêu tham số theo 3 trục đang chọn                                    |
+| **Màu sắc**    | `final_val_accuracy` (hoặc `final_accuracy`), thang màu liên tục có chú giải |
+| **Kích thước** | `final_val_loss`: loss cao → cầu nhỏ                                  |
+| **Viền / icon**| Trạng thái: ● completed · ◐ running · ✕ failed                        |
+| **Phát sáng**  | Emissive glow khi node được selected hoặc AI highlight                |
+| **Label**      | Billboard text hiển thị `run_name` khi hover                          |
 
 #### Tương tác 3D
 
@@ -203,6 +213,7 @@ sequenceDiagram (mô tả text)
 | 3D-04 | Camera Fly-to      | Animate camera position smooth tới node khi selected (GSAP / spring) |
 | 3D-05 | Grid & Axes Helper | Lưới tham chiếu + labels trục X, Y, Z                                |
 | 3D-06 | Node Filtering     | Filter nodes theo status, accuracy range (UI controls bên ngoài)     |
+| 3D-07 | Axis Selector      | Chọn key cho từng trục X, Y, Z; node di chuyển theo lựa chọn mới     |
 
 ### 2.3 AI Copilot Agent
 
@@ -218,51 +229,49 @@ sequenceDiagram (mô tả text)
 
 #### Kiến trúc AI Engine
 
+Trợ lý dùng **tool calling**. LLM không nhận toàn bộ dữ liệu trong prompt và không tự đưa ra số liệu: mọi con số đều lấy qua tool, và tool gọi service layer. Tên và tham số của từng tool xem ở mục "Thiết kế trợ lý AI" trong README.
+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     AI Copilot Engine                            │
-│                                                                 │
-│  ┌──────────────┐    ┌──────────────────┐    ┌───────────────┐  │
-│  │ Context      │    │ Prompt Template  │    │ Response       │  │
-│  │ Builder      │───►│ Engine           │───►│ Parser         │  │
-│  │              │    │                  │    │                │  │
-│  │ • Fetch runs │    │ • System prompt  │    │ • Extract text │  │
-│  │ • Rank top-K │    │ • Few-shot       │    │ • Extract      │  │
-│  │ • Build      │    │   examples       │    │   actions:     │  │
-│  │   summary    │    │ • User query     │    │   highlight,   │  │
-│  │   stats      │    │ • Context inject │    │   focus,       │  │
-│  └──────────────┘    └────────┬─────────┘    │   compare      │  │
-│                               │              └───────┬───────┘  │
-│                               ▼                      │          │
-│                      ┌────────────────┐              │          │
-│                      │  LLM API Call  │──────────────┘          │
-│                      │  (Gemini/GPT)  │                         │
-│                      └────────────────┘                         │
-└─────────────────────────────────────────────────────────────────┘
+Câu hỏi ──► Engine ──► LLM (kèm danh sách tool)
+              ▲              │
+              │              ▼ tool call
+              │        ┌───────────────┐      ┌───────────────┐
+              ├────────┤  Query tools  ├─────►│ Service layer │
+              │ kết quả└───────────────┘      └───────────────┘
+              │        ┌───────────────┐
+              ├────────┤   UI tools    │  (không chạm DB, chỉ ghi nhận action)
+              │        └───────────────┘
+              ▼
+   { message, actions } ──► Frontend ──► Zustand store
 ```
+
+| Intent | Tool truy vấn                                                    | Action trên giao diện            |
+| ------ | ---------------------------------------------------------------- | -------------------------------- |
+| AI-01  | `find_best_runs`                                                 | `highlight_runs`, `focus_camera` |
+| AI-02  | `compare_runs`                                                   | `highlight_runs`                 |
+| AI-03  | `detect_overfitting`, `get_run`                                  | `focus_camera`, `open_inspector` |
+| AI-04  | `list_experiments`, `find_best_runs`, thêm `summarize_experiment` khi làm task này | Không bắt buộc |
+| AI-05  | `find_best_runs`, `compare_runs`                                 | `highlight_runs`                 |
+
+Quy tắc:
+
+- Phép tính số liệu (so sánh, phát hiện overfitting) làm bằng code, không để LLM tự tính.
+- Action sinh ra từ UI tool, không tách từ văn bản của LLM. `run_id` phải tồn tại trong database trước khi trả về frontend.
+- Giới hạn số vòng gọi tool trong một câu hỏi để tránh lặp vô hạn.
+- Nhà cung cấp LLM: chốt trước Phase 3 (Gemini hoặc OpenAI), và chỉ đổi ở một file `llm_client.py`.
 
 #### Structured Response Format
 
-AI Engine trả về JSON có cấu trúc để Frontend xử lý hành vi:
+`POST /api/copilot/chat` trả về JSON. ID của run là số nguyên:
 
 ```json
 {
-  "message": "Run tốt nhất là **run-003** với accuracy 0.9845...",
+  "message": "Run-007 có val_accuracy cao nhất (0.9644)...",
   "actions": [
-    {
-      "type": "highlight",
-      "run_ids": ["run-003"]
-    },
-    {
-      "type": "camera_focus",
-      "target_run_id": "run-003"
-    }
-  ],
-  "metadata": {
-    "intent": "best_run",
-    "confidence": 0.95,
-    "referenced_runs": ["run-003"]
-  }
+    { "type": "highlight_runs", "run_ids": [7] },
+    { "type": "focus_camera", "run_id": 7 },
+    { "type": "open_inspector", "run_id": 7 }
+  ]
 }
 ```
 
@@ -319,12 +328,13 @@ AI Engine trả về JSON có cấu trúc để Frontend xử lý hành vi:
 3d-mlops-copilot/
 │
 ├── README.md                          # Hướng dẫn tổng quan
-├── PLAN.md                            # File kế hoạch này
-├── .gitignore
-├── .env.example                       # Template biến môi trường
+├── CONTRIBUTING.md                    # Quy trình làm việc nhóm
+├── CLAUDE.md                          # Quy ước code cho dự án
+├── .github/                           # CI, CODEOWNERS, mẫu PR
 │
 ├── backend/                           # ═══ Python FastAPI Backend ═══
 │   ├── pyproject.toml                 # Python dependencies (uv/pip)
+│   ├── .env.example                   # Template biến môi trường
 │   ├── alembic.ini                    # DB migration config
 │   │
 │   ├── app/
@@ -358,10 +368,11 @@ AI Engine trả về JSON có cấu trúc để Frontend xử lý hành vi:
 │   │   │   ├── tracking.py           # ML tracking CRUD operations
 │   │   │   └── copilot/
 │   │   │       ├── __init__.py
-│   │   │       ├── engine.py          # AI Copilot orchestrator
-│   │   │       ├── context_builder.py # Build context from runs data
-│   │   │       ├── prompt_templates.py# System prompt + few-shot examples
-│   │   │       └── response_parser.py # Parse LLM output → structured JSON
+│   │   │       ├── engine.py          # Vòng lặp tool calling
+│   │   │       ├── llm_client.py      # Wrapper LLM, đổi nhà cung cấp tại đây
+│   │   │       ├── query_tools.py     # Tool truy vấn, gọi service layer
+│   │   │       ├── ui_tools.py        # Tool điều khiển giao diện (actions)
+│   │   │       └── prompts.py         # System prompt
 │   │   │
 │   │   └── utils/
 │   │       ├── __init__.py
@@ -437,7 +448,7 @@ AI Engine trả về JSON có cấu trúc để Frontend xử lý hành vi:
 │   │   │
 │   │   └── utils/
 │   │       ├── coordinate-mapper.ts   # Map run data → 3D position
-│   │       └── color-utils.ts         # Status → color mapping
+│   │       └── color-utils.ts         # Metric → thang màu, status → viền
 │   │
 │   └── tests/
 │       ├── components/
@@ -446,6 +457,7 @@ AI Engine trả về JSON có cấu trúc để Frontend xử lý hành vi:
 │           └── coordinate-mapper.test.ts
 │
 └── docs/
+    ├── PLAN.md                        # File kế hoạch này
     ├── api-spec.md                    # API endpoint documentation
     ├── architecture-decisions.md      # ADR log
     └── screenshots/                   # Demo screenshots
@@ -475,24 +487,24 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [ ] **P1-T01: Khởi tạo Backend Project**
+- [x] **P1-T01: Khởi tạo Backend Project**
   - Tạo `backend/` directory, `pyproject.toml` với dependencies
   - Setup FastAPI app skeleton (`main.py`, `config.py`)
   - Cấu hình CORS middleware cho `localhost:5173` (Vite dev server) / `localhost:3000`
   - **DoD:** `uvicorn app.main:app --reload` khởi chạy, `/docs` (Swagger) accessible
 
-- [ ] **P1-T02: Database Models & Setup**
+- [x] **P1-T02: Database Models & Setup**
   - Định nghĩa SQLAlchemy models: `Experiment`, `Run`, `Metric`
   - Tạo `database.py` với async SQLite engine
   - Auto-create tables on startup (`metadata.create_all`)
   - **DoD:** Database file `mlops.db` được tạo; tables verify qua `sqlite3` CLI
 
-- [ ] **P1-T03: Pydantic Schemas**
+- [x] **P1-T03: Pydantic Schemas**
   - Tạo request/response schemas cho Experiment, Run, Metric
   - Validation rules: `learning_rate > 0`, `0 ≤ accuracy ≤ 1`, `epochs ≥ 1`
   - **DoD:** Schemas importable, JSON serialization/deserialization hoạt động
 
-- [ ] **P1-T04: CRUD API Endpoints**
+- [x] **P1-T04: CRUD API Endpoints**
   - `POST /api/experiments` — Tạo experiment
   - `GET /api/experiments` — List experiments
   - `POST /api/runs` — Tạo run (với hyperparams JSON)
@@ -502,7 +514,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - `POST /api/runs/{id}/metrics` — Log metrics cho 1 epoch
   - **DoD:** Tất cả endpoints test thành công qua Swagger UI; HTTP status codes đúng
 
-- [ ] **P1-T05: Demo Training Script**
+- [x] **P1-T05: Demo Training Script**
   - Viết `scripts/train_mnist_demo.py`:
     - Train sklearn `MLPClassifier` hoặc PyTorch CNN trên MNIST (subset nhỏ)
     - Mỗi epoch: call `POST /api/runs/{id}/metrics` với accuracy, loss, val_loss
@@ -510,12 +522,12 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Chạy 5-10 lần với hyperparams khác nhau (vary `lr`, `batch_size`, `epochs`)
   - **DoD:** Database có ≥ 5 runs, mỗi run có ≥ 5 epochs metrics; `GET /api/runs` trả về đúng data
 
-- [ ] **P1-T06: Seed Data Utility**
+- [x] **P1-T06: Seed Data Utility**
   - Viết `utils/seed_data.py`: tạo synthetic runs (không cần train thật) cho dev nhanh
   - Generate 20-50 runs với realistic-looking metrics curves
   - **DoD:** Chạy seed script → DB populated; frontend dev có thể dùng ngay
 
-- [ ] **P1-T07: Unit Tests cho Tracking API**
+- [x] **P1-T07: Unit Tests cho Tracking API**
   - Test CRUD operations với in-memory SQLite
   - Test validation (invalid hyperparams, missing fields)
   - **DoD:** `pytest tests/test_tracking_api.py` — all green, ≥ 80% coverage cho routers
@@ -566,25 +578,27 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - **DoD:** 3D canvas renders; orbit controls functional; grid visible
 
 - [ ] **P2-T05: Axes Labels & Reference Grid**
-  - `<AxesLabels>`: Billboard text cho "Epoch →", "Accuracy ↑", "Loss →"
-  - Tick marks + giá trị trên mỗi trục (0, 0.2, 0.4, ..., 1.0 cho Accuracy)
+  - `<AxesLabels>`: Billboard text theo tên key của trục đang chọn (mặc định `learning_rate`, `batch_size`, `dropout`)
+  - Tick marks + giá trị trên mỗi trục, đúng thang đang dùng (log hoặc tuyến tính)
   - Semi-transparent planes cho mặt XY, XZ (optional)
   - **DoD:** Labels đọc được từ mọi góc camera; không bị clip khi zoom
 
 - [ ] **P2-T06: Run Node Component**
   - `<RunNode>`: nhận prop `run: Run`
   - Render `<Sphere>` tại vị trí `(x, y, z)` từ `useNodePosition(run)`
-  - Màu sắc: `getStatusColor(run.status)`
-  - Kích thước: `getNodeSize(run.final_accuracy)` (range 0.15 – 0.5)
+  - Màu sắc: thang màu theo `final_val_accuracy` (fallback `final_accuracy`)
+  - Kích thước: theo `final_val_loss`, loss cao → cầu nhỏ (range 0.15 – 0.5)
+  - Viền / icon theo `run.status`
   - Material: `MeshStandardMaterial` + emissive khi selected
-  - **DoD:** Single sphere renders đúng vị trí; màu thay đổi theo status
+  - **DoD:** Single sphere renders đúng vị trí; màu theo metric, viền theo status
 
 - [ ] **P2-T07: Run Nodes Collection & Data Binding**
   - `<RunNodes>`: fetch runs từ API → map thành `<RunNode>` components
   - Coordinate mapper: `coordinate-mapper.ts`
-    - X = `(run.final_epoch / max_epoch_across_runs) * SCALE_X`
-    - Y = `run.final_accuracy * SCALE_Y`
-    - Z = `(run.final_loss / max_loss_across_runs) * SCALE_Z`
+    - X = `normalize(log10(learning_rate)) * SCALE_X`
+    - Y = `normalize(log2(batch_size)) * SCALE_Y`
+    - Z = `normalize(key số còn lại) * SCALE_Z`, theo quy tắc ở mục 2.2
+    - Run thiếu key đang dùng làm trục → mặt phẳng "không xác định", vẽ mờ
   - Handle empty state (no runs)
   - **DoD:** Tất cả runs từ API hiển thị đúng vị trí trong 3D; ≥ 20 nodes render mượt
 
@@ -611,6 +625,15 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Giữ camera nhìn vào node (lookAt target)
   - **DoD:** Select node → camera smooth transition tới node; không jump
 
+- [ ] **P2-T11: Chọn trục 3D**
+  - Dropdown cho X, Y, Z, liệt kê key dạng số trong `hyperparams` và các metric cuối
+  - Đổi trục → node di chuyển, label và tick cập nhật
+  - **DoD:** Đổi trục → mọi node về đúng vị trí mới; key không phải số không xuất hiện trong danh sách
+
+- [ ] **P2-T12: Endpoint xoá (Should)**
+  - `DELETE /api/experiments/{id}` và `DELETE /api/runs/{id}`, tận dụng cascade đã có ở tầng database
+  - **DoD:** Xoá xong trả 204; id không tồn tại trả 404; có test
+
 ---
 
 ### Phase 3: AI Copilot & Context Integration
@@ -620,71 +643,34 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 #### Tasks
 
 - [ ] **P3-T01: LLM Client Setup**
-  - Install `google-generativeai` (Gemini) hoặc `openai` SDK
+  - Chốt nhà cung cấp, cài SDK tương ứng
   - Tạo `config.py`: load API key từ `.env` (`LLM_API_KEY`, `LLM_MODEL`)
-  - Tạo thin wrapper: `async def call_llm(messages: list[dict]) -> str`
-  - **DoD:** Call LLM với test prompt → nhận response thành công
+  - Tạo `llm_client.py`: một interface hỗ trợ tool calling, kèm bản giả (fake) để test không tốn API
+  - **DoD:** Gọi LLM với một tool mẫu → nhận được tool call đúng tên và tham số
 
-- [ ] **P3-T02: Context Builder**
-  - `context_builder.py`:
-    - `build_runs_summary(runs)`: tạo text tóm tắt tất cả runs
+- [ ] **P3-T02: Query Tools**
+  - `query_tools.py`: `list_experiments`, `find_best_runs`, `get_run`, `compare_runs`, `detect_overfitting`
+  - Tool gọi service layer, không truy vấn database trực tiếp
+  - `detect_overfitting`: tính khoảng cách train/val qua các epoch bằng code
+  - **DoD:** Mỗi tool có unit test với dữ liệu seed; run không tồn tại trả lỗi rõ ràng cho LLM
 
-      ```
-      Experiment: MNIST-CNN-v1 (10 runs)
-      Best accuracy: run-003 (0.9845), Worst: run-007 (0.7123)
-      Average accuracy: 0.8932 ± 0.067
-      Hyperparams range: lr=[0.0001, 0.1], batch_size=[16, 128]
+- [ ] **P3-T03: UI Action Tools**
+  - `ui_tools.py`: `highlight_runs`, `focus_camera`, `open_inspector`
+  - Tool chỉ ghi nhận action, không chạm database ngoài việc kiểm tra `run_id` tồn tại
+  - **DoD:** `run_id` không tồn tại bị loại khỏi `actions`; có unit test
 
-      Run details:
-      - run-001: lr=0.001, bs=32, epochs=10 → acc=0.9567, loss=0.145
-      - run-002: lr=0.01, bs=64, epochs=15 → acc=0.9234, loss=0.267
-      ...
-      ```
-
-    - `build_run_detail(run)`: chi tiết 1 run (all epochs metrics)
-    - `build_comparison(run_a, run_b)`: side-by-side
-  - **DoD:** Functions output clean, structured text; unit tested
-
-- [ ] **P3-T03: Prompt Template Engine**
-  - `prompt_templates.py`:
-    - **System prompt**: Vai trò AI, output format yêu cầu, cách xử lý actions
-    - **Few-shot examples**: 2-3 ví dụ Q&A với structured JSON response
-    - Template:
-
-      ```
-      You are an ML Experiment Copilot. You have access to experiment data.
-
-      IMPORTANT: Your response MUST be valid JSON with this structure:
-      {
-        "message": "Your answer in Markdown...",
-        "actions": [
-          {"type": "highlight", "run_ids": ["run-003"]},
-          {"type": "camera_focus", "target_run_id": "run-003"}
-        ]
-      }
-
-      EXPERIMENT CONTEXT:
-      {context}
-
-      USER QUESTION: {question}
-      ```
-  - **DoD:** Templates generate valid prompts; context injection works
-
-- [ ] **P3-T04: Response Parser**
-  - `response_parser.py`:
-    - Parse LLM output → extract JSON
-    - Handle cases: pure JSON, JSON trong markdown code block, fallback text-only
-    - Validate `actions` array: known types (`highlight`, `camera_focus`, `compare`)
-    - Validate `run_ids` tồn tại trong database
-  - **DoD:** Parser handles all 3 format cases; invalid run_ids filtered out
+- [ ] **P3-T04: System Prompt & Schemas**
+  - `prompts.py`: vai trò của trợ lý, yêu cầu mọi con số phải lấy từ tool, ngôn ngữ trả lời
+  - `schemas/copilot.py`: `ChatRequest`, `ChatResponse`, các kiểu `Action`
+  - **DoD:** Schema khớp ví dụ ở mục 2.3; OpenAPI hiển thị đúng
 
 - [ ] **P3-T05: Copilot API Endpoint**
   - `POST /api/copilot/chat`:
     - Request: `{ "message": str, "experiment_id": int (optional) }`
-    - Flow: fetch runs → build context → inject prompt → call LLM → parse → respond
-    - Response: `CopilotResponse` schema (message + actions + metadata)
-  - Error handling: LLM timeout → fallback message; invalid response → retry once
-  - **DoD:** Endpoint returns structured JSON; 3 test queries return meaningful answers
+    - Flow: gửi câu hỏi + danh sách tool → chạy tool call → lặp đến khi LLM trả lời (có giới hạn số vòng) → gom actions
+    - Response: `{ message, actions }`
+  - Error handling: LLM timeout hoặc lỗi → thông báo thân thiện, không trả 500 thô
+  - **DoD:** 3 loại câu hỏi (best run, compare, diagnose) trả lời đúng số liệu trong database
 
 - [ ] **P3-T06: Chat Panel UI**
   - `<ChatPanel>`: message list + input
@@ -695,14 +681,16 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 - [ ] **P3-T07: Action Handler (Frontend)**
   - `<ActionHandler>`: subscribe `useChatStore` → khi AI response có actions:
-    - `highlight`: dispatch `useRunStore.highlightRuns(run_ids)`
-    - `camera_focus`: dispatch `useCameraStore.setTarget(run_id)`
+    - `highlight_runs`: dispatch `useRunStore.highlightRuns(run_ids)`
+    - `focus_camera`: dispatch `useCameraStore.setTarget(run_id)`
+    - `open_inspector`: dispatch `useRunStore.selectRun(run_id)`
   - RunNode listens: nếu highlighted → add orange emissive ring
   - **DoD:** AI says "best run is run-003" → node run-003 glows + camera flies to it
 
 - [ ] **P3-T08: Copilot Engine Tests**
-  - Unit tests cho context builder, prompt templates, response parser
-  - Integration test: mock LLM response → verify full pipeline
+  - Unit tests cho query tools, UI tools và vòng lặp engine
+  - Integration test: fake LLM trả tool call → kiểm tra toàn bộ pipeline
+  - Bộ câu hỏi kiểm tra độ chính xác của AI: đối chiếu số trong câu trả lời với database
   - **DoD:** `pytest tests/test_copilot_engine.py` — all green
 
 ---
@@ -813,8 +801,8 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 | #   | Rủi ro                                            | Xác suất   | Tác động   | Giải pháp giảm thiểu                                                                                                                     |
 | --- | ------------------------------------------------- | ---------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | R1  | **3D Performance Degradation** khi > 200 nodes    | Trung bình | Cao        | Sử dụng `InstancedMesh` thay vì individual meshes; LOD (Level of Detail); Frustum culling; Virtual pagination (chỉ render visible nodes) |
-| R2  | **LLM Latency cao** (> 10s per response)          | Cao        | Trung bình | Streaming response (SSE); Cache frequent queries; Giảm context window (top-K runs thay vì all); Show loading skeleton                    |
-| R3  | **LLM Output không đúng JSON format**             | Trung bình | Trung bình | Robust parser với multiple fallback strategies; JSON mode (nếu API hỗ trợ); Retry với explicit format reminder; Schema validation        |
+| R2  | **LLM Latency cao** (> 10s per response)          | Cao        | Trung bình | Streaming response (SSE); Cache frequent queries; Giới hạn số vòng tool và kích thước kết quả tool (top-K); Show loading skeleton                    |
+| R3  | **Tool call sai** (sai tên, sai tham số, lặp vô hạn) | Trung bình | Trung bình | Validate tham số bằng schema; trả lỗi rõ ràng để LLM tự sửa; giới hạn số vòng gọi tool; `run_id` được kiểm tra trước khi trả về frontend |
 | R4  | **CORS / Proxy issues** giữa Vite và FastAPI      | Thấp       | Thấp       | Cấu hình `vite.config.ts` proxy; FastAPI CORS middleware rõ ràng; Document networking setup                                              |
 | R5  | **State Desync** giữa 3 panels                    | Trung bình | Cao        | Single source of truth (Zustand); Derived state thay vì duplicated; Unit test state transitions; DevTools middleware                     |
 | R6  | **SQLite Concurrency** khi nhiều writes đồng thời | Thấp       | Thấp       | Acceptable cho PoC; Migration path to PostgreSQL documented; WAL mode enabled                                                            |
@@ -839,13 +827,13 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 ✅ Demo training script tạo ≥ 5 runs realistic
 ✅ 3D Canvas render ≥ 50 nodes @ 60fps
 ✅ Click node → Inspector Panel hiện đúng data
-✅ AI Copilot trả lời ≥ 3 loại truy vấn có context
+✅ AI Copilot trả lời ≥ 3 loại truy vấn bằng số liệu lấy qua tool
 ✅ AI response trigger camera fly-to + node highlight
 ✅ Full flow E2E: train → log → visualize → query AI — dưới 1 phút demo
 ```
 
 ---
 
-> **Next Step:** Bắt đầu Phase 1 — Foundation & MLOps Engine Setup.
+> **Next Step:** Phase 1 đã xong. Bắt đầu Phase 2 — 3D Scene & Canvas Development.
 >
 > Ước tính tổng thời gian: **11–16 ngày** (1 developer) hoặc **7–10 ngày** (2 developers parallel).
