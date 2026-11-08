@@ -258,7 +258,7 @@ Quy tắc:
 - Phép tính số liệu (so sánh, phát hiện overfitting) làm bằng code, không để LLM tự tính.
 - Action sinh ra từ UI tool, không tách từ văn bản của LLM. `run_id` phải tồn tại trong database trước khi trả về frontend.
 - Giới hạn số vòng gọi tool trong một câu hỏi để tránh lặp vô hạn.
-- Nhà cung cấp LLM: chốt trước Phase 3 (Gemini hoặc OpenAI), và chỉ đổi ở một file `llm_client.py`.
+- Nhà cung cấp LLM: Gemini (`gemini-3.5-flash-lite`, gói miễn phí), mọi chi tiết nằm trong `llm_client.py`.
 
 #### Structured Response Format
 
@@ -642,7 +642,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [ ] **P3-T01: LLM Client Setup** (đã có interface và bản giả lập, chưa nối LLM thật)
+- [ ] **P3-T01: LLM Client Setup** (đã có client Gemini và bản giả lập, chưa chạy thử với key thật)
   - Chốt nhà cung cấp, cài SDK tương ứng
   - Tạo `config.py`: load API key từ `.env` (`LLM_API_KEY`, `LLM_MODEL`)
   - Tạo `llm_client.py`: một interface hỗ trợ tool calling, kèm bản giả (fake) để test không tốn API
@@ -664,7 +664,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - `schemas/copilot.py`: `ChatRequest`, `ChatResponse`, các kiểu `Action`
   - **DoD:** Schema khớp ví dụ ở mục 2.3; OpenAPI hiển thị đúng
 
-- [ ] **P3-T05: Copilot API Endpoint** (endpoint đã chạy, chờ LLM thật và đủ tool)
+- [ ] **P3-T05: Copilot API Endpoint** (endpoint đã chạy, chờ đủ tool)
   - `POST /api/copilot/chat`:
     - Request: `{ "message": str, "experiment_id": int (optional) }`
     - Flow: gửi câu hỏi + danh sách tool → chạy tool call → lặp đến khi LLM trả lời (có giới hạn số vòng) → gom actions
@@ -814,7 +814,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 | Constraint                | Chi tiết                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------- |
 | **Database**              | SQLite — single file, phù hợp PoC. Không dùng cho production multi-user.        |
-| **LLM Provider**          | Cần API key (Gemini hoặc OpenAI). Free tier có rate limits.                     |
+| **LLM Provider**          | Cần API key Gemini. Free tier có rate limits, quota tính theo project.                     |
 | **Browser Compatibility** | WebGL 2.0 required. Chrome/Edge/Firefox modern. Safari có thể gặp issues.       |
 | **Concurrent Users**      | PoC scope: single user. Không thiết kế cho multi-user real-time collaboration.  |
 | **Data Scale**            | Thiết kế cho ≤ 500 runs / ≤ 50 epochs per run. Vượt quá cần optimization riêng. |

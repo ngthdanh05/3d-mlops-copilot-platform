@@ -156,7 +156,7 @@ Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số 
 ## Thiết kế trợ lý AI
 
 > [!NOTE]
-> Đã có vòng lặp tool calling, `find_best_runs`, 3 tool điều khiển giao diện và khung chat. Các tool truy vấn còn lại và kết nối LLM thật chưa có: hiện backend dùng **LLM giả lập**, câu trả lời có tiền tố `[LLM giả lập]` và chỉ hiểu câu hỏi tìm run tốt nhất.
+> Đã có vòng lặp tool calling, kết nối Gemini, `find_best_runs`, 3 tool điều khiển giao diện và khung chat. Các tool truy vấn còn lại chưa có. Khi chưa đặt `LLM_API_KEY`, backend dùng **LLM giả lập**: câu trả lời có tiền tố `[LLM giả lập]` và chỉ hiểu câu hỏi tìm run tốt nhất.
 
 Trợ lý dùng **tool calling (function calling)**: LLM **không** được nhận toàn bộ dữ liệu trong prompt và **không** tự đưa ra số liệu. Mọi con số phải lấy qua công cụ. Cách này tránh việc AI bịa số và vẫn chạy được khi có hàng trăm run.
 
@@ -190,7 +190,10 @@ Ví dụ phản hồi của `/api/copilot/chat`:
 }
 ```
 
-Nhà cung cấp LLM: **LLM_PROVIDER_TBD** *(cần chốt: Gemini hoặc OpenAI)*. Khi chốt, chỉ cần thêm client trong `backend/app/services/copilot/llm_client.py` và trả về nó ở `get_llm_client`.
+Nhà cung cấp LLM: **Gemini**, mặc định model `gemini-3.5-flash-lite` trên gói miễn phí. Mọi chi tiết của nhà cung cấp nằm trong `backend/app/services/copilot/llm_client.py`.
+
+> [!WARNING]
+> Google dùng nội dung gửi qua gói miễn phí để cải thiện sản phẩm. Không đưa dữ liệu nhạy cảm vào hyperparams, tên run hay câu hỏi khi dùng gói này.
 
 ---
 
@@ -200,7 +203,7 @@ Nhà cung cấp LLM: **LLM_PROVIDER_TBD** *(cần chốt: Gemini hoặc OpenAI)*
 |---|---|
 | **Backend** | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2 (async) + aiosqlite, SQLite (chế độ WAL) |
 | **Frontend** *(Phase 2)* | React 18, Vite, TypeScript, Tailwind CSS, React Three Fiber + drei, Zustand |
-| **AI** *(Phase 3)* | LLM có hỗ trợ tool calling, gọi qua backend |
+| **AI** | Gemini qua SDK `google-genai`, dùng tool calling, gọi qua backend |
 | **Công cụ** | uv (quản lý gói Python), pnpm, Ruff, pytest + pytest-cov, GitHub Actions |
 | **Quản lý dự án** | ClickUp (công việc, sprint) + GitHub (code, review) |
 
@@ -345,7 +348,7 @@ Tất cả endpoint có tiền tố `/api`. Tài liệu đầy đủ, có thể 
 | `GET` | `/api/runs/{id}` | Chi tiết run kèm toàn bộ metrics theo epoch | 200 · 404 |
 | `PUT` | `/api/runs/{id}` | Cập nhật trạng thái: `completed` / `failed` / `running` | 200 · 404 · 409 |
 | `POST` | `/api/runs/{id}/metrics` | Ghi metrics cho 1 epoch | 201 · 404 · 409 epoch đã ghi |
-| `POST` | `/api/copilot/chat` | Hỏi trợ lý AI (hiện dùng LLM giả lập), trả về `message` + `actions` | 200 · 422 |
+| `POST` | `/api/copilot/chat` | Hỏi trợ lý AI, trả về `message` + `actions` | 200 · 422 |
 
 Dữ liệu gửi lên sai định dạng luôn trả về **422**, kèm thông báo chỉ rõ field nào sai.
 
@@ -450,8 +453,8 @@ with TrackingClient("http://localhost:8000") as client:
 | `DEBUG` | `false` | In câu lệnh SQL ra console |
 | `DATABASE_URL` | file `backend/mlops.db` | Chuỗi kết nối, ví dụ `sqlite+aiosqlite:///./mlops.db` |
 | `CORS_ORIGINS` | `localhost:5173`, `localhost:3000` | Các địa chỉ frontend được phép gọi API (dạng JSON list) |
-| `LLM_API_KEY` | — | API key của LLM *(Phase 3, chỉ dùng ở backend)* |
-| `LLM_MODEL` | — | Tên model LLM *(Phase 3)* |
+| `LLM_API_KEY` | — | API key Gemini, lấy tại [AI Studio](https://aistudio.google.com/apikey). Chỉ dùng ở backend. Để trống thì dùng LLM giả lập |
+| `LLM_MODEL` | `gemini-3.5-flash-lite` | Tên model Gemini |
 
 > [!CAUTION]
 > Không commit file `.env` (đã có trong `.gitignore`). Mỗi thành viên tự tạo `.env` trên máy mình. API key dùng chung được leader gửi riêng, **không dán vào chat nhóm hay ClickUp**.
