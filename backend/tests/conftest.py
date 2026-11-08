@@ -10,6 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from app.services.copilot.llm_client import FakeLLMClient, get_llm_client
 
 
 @pytest.fixture
@@ -44,6 +45,8 @@ async def client(session_factory) -> AsyncIterator[AsyncClient]:
             yield s
 
     app.dependency_overrides[get_db] = _get_db
+    # Tests must never reach a real LLM, even when the developer's .env has a key.
+    app.dependency_overrides[get_llm_client] = FakeLLMClient
     # ASGITransport does not run the lifespan, so the real mlops.db is never touched.
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
