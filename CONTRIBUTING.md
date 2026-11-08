@@ -35,7 +35,7 @@ Mỗi nhóm có **1 sub-lead**, chịu trách nhiệm review PR của nhóm và 
 
 ## 2. Thiết lập môi trường lần đầu
 
-**Công cụ cần cài:** Git, Python 3.11+, [uv](https://docs.astral.sh/uv/), và Node.js 20+ cùng pnpm nếu bạn làm frontend.
+**Công cụ cần cài:** Git, Python 3.11+, [uv](https://docs.astral.sh/uv/), và Node.js 20.19+ cùng pnpm nếu bạn làm frontend.
 
 ```bash
 # 1. Clone repo

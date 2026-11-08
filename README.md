@@ -219,7 +219,7 @@ Nhà cung cấp LLM: **LLM_PROVIDER_TBD** *(cần chốt trước Phase 3: Gemin
 │   └── CODEOWNERS                # Tự gán reviewer theo thư mục
 ├── docs/
 │   └── PLAN.md                   # Kế hoạch chi tiết & lộ trình
-├── frontend/                     # (Phase 2 – chưa khởi tạo)
+├── frontend/                     # React + R3F (khung 3 panel, store, API client)
 └── backend/
     ├── pyproject.toml            # Dependencies & cấu hình pytest/ruff/coverage
     ├── .env.example              # Mẫu biến môi trường
@@ -246,7 +246,7 @@ Nhà cung cấp LLM: **LLM_PROVIDER_TBD** *(cần chốt trước Phase 3: Gemin
 
 - **Python 3.11+**
 - **[uv](https://docs.astral.sh/uv/)**: trình quản lý gói Python. Cài bằng `pip install uv` hoặc xem [hướng dẫn chính thức](https://docs.astral.sh/uv/getting-started/installation/).
-- *(Phase 2)* **Node.js 20+** và **pnpm** (`npm install -g pnpm`).
+- **Node.js 20.19+** (hoặc 22.12+) và **pnpm** (`npm install -g pnpm@10`), nếu làm frontend.
 
 > [!TIP]
 > Trên Windows, nếu cài bằng `pip install --user uv` mà gõ `uv` báo "not found", hãy thêm thư mục `%APPDATA%\Python\Python3xx\Scripts` vào biến môi trường `PATH`.
@@ -268,7 +268,7 @@ Khi khởi động, server tự tạo file `backend/mlops.db` cùng các bảng.
 | http://localhost:8000/redoc | Tài liệu API dạng ReDoc |
 | http://localhost:8000/api/health | Kiểm tra server sống: `{"status": "ok"}` |
 
-### Frontend *(Phase 2 – sẽ cập nhật khi khởi tạo)*
+### Frontend
 
 ```bash
 cd frontend
@@ -276,7 +276,13 @@ pnpm install
 pnpm dev          # mở http://localhost:5173
 ```
 
-Frontend gọi backend ở `http://localhost:8000`. Hãy chạy backend trước.
+Frontend chuyển các request `/api` tới `http://localhost:8000` qua proxy của Vite. Hãy chạy backend trước.
+
+> [!TIP]
+> Trên Windows, nếu gõ `pnpm` báo "not recognized", hãy thêm thư mục `%APPDATA%\npm` vào biến môi trường `PATH`.
+
+> [!WARNING]
+> Dự án dùng React 18 nên phải giữ `@react-three/fiber` ở v8 và `@react-three/drei` ở v9. Bản mới hơn của hai thư viện này yêu cầu React 19.
 
 ---
 
