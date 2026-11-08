@@ -2,13 +2,13 @@
 
 > Nền tảng quản lý thực nghiệm học máy (ML experiment tracking) trong **không gian 3D**, tích hợp **trợ lý AI** giúp bạn tìm, so sánh và chẩn đoán các lần huấn luyện mô hình.
 
-[![CI](https://github.com/ORG_NAME/3d-mlops-copilot-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ORG_NAME/3d-mlops-copilot-platform/actions/workflows/ci.yml)
+[![CI](https://github.com/ngthdanh05/3d-mlops-copilot-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ngthdanh05/3d-mlops-copilot-platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-async-003B57?logo=sqlite&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![Three.js](https://img.shields.io/badge/React_Three_Fiber-3D-000000?logo=three.js&logoColor=white)
-![Status](https://img.shields.io/badge/trạng_thái-PoC_·_Phase_1_xong-orange)
+![Status](https://img.shields.io/badge/trạng_thái-PoC-orange)
 
 ---
 
@@ -29,8 +29,7 @@
 - [Kiểm thử](#kiểm-thử)
 - [Lộ trình phát triển](#lộ-trình-phát-triển)
 - [Giới hạn của bản PoC](#giới-hạn-của-bản-poc)
-- [Nhóm phát triển](#nhóm-phát-triển)
-- [Đóng góp](#đóng-góp)
+- [Quy ước phát triển](#quy-ước-phát-triển)
 
 ---
 
@@ -49,13 +48,16 @@ Khi huấn luyện mô hình học máy, ta thường chạy **rất nhiều l�
 Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đồng bộ trạng thái** với nhau.
 
 > [!NOTE]
-> Đây là bản **Proof of Concept (PoC)**, chạy trên máy cá nhân (localhost), một người dùng. Hiện **Phase 1 (Backend tracking)** đã hoàn thành; giao diện 3D và trợ lý AI đang được phát triển. Xem [Lộ trình](#lộ-trình-phát-triển).
+> Đây là bản **Proof of Concept (PoC)**, chạy trên máy cá nhân (localhost), một người dùng. Hiện backend tracking, không gian 3D và luồng AI tìm run tốt nhất đã chạy được; các công cụ phân tích còn lại của AI đang được phát triển. Xem [Lộ trình](#lộ-trình-phát-triển).
 
 ---
 
 ## Tính năng
 
-### ✅ Đã có (Phase 1 – Backend)
+### ✅ Đã có
+
+- Không gian 3D tương tác: xoay, zoom, click, hover, camera bay tới run, câu kết luận tính từ dữ liệu, Inspector Panel.
+- Trợ lý AI dùng Gemini: tìm run tốt nhất, giải thích so với trung vị, làm nổi bật và bay camera tới run đó.
 
 - REST API để tạo **experiment**, **run** và ghi **metrics theo từng epoch**.
 - Kiểm tra dữ liệu chặt chẽ: `learning_rate > 0`, `0 ≤ accuracy ≤ 1`, `loss ≥ 0`, `epoch ≥ 1`, không nhận NaN/vô cực, không nhận field lạ.
@@ -64,17 +66,15 @@ Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đ�
 - **Script huấn luyện demo** (scikit-learn) tự ghi log lên API.
 - **Công cụ sinh dữ liệu giả lập** với đường cong học tập thực tế (có run tốt, run overfit, run lỗi, run đang chạy).
 - Swagger UI tự động tại `/docs`.
-- 78 bài kiểm thử, độ phủ code 99%. CI tự chạy test và lint cho mỗi Pull Request.
+- 113 bài kiểm thử backend. CI tự chạy test và lint cho mỗi Pull Request.
 
 ### 🚧 Sắp có
 
 | Tính năng | Phase | Ưu tiên |
 |---|---|---|
-| Không gian 3D: xoay, zoom, click, hover, camera bay tới node | 2 | Must |
 | Chọn trục 3D từ danh sách siêu tham số / metrics | 2 | Must |
-| Inspector Panel: bảng siêu tham số + biểu đồ accuracy/loss theo epoch | 2 | Must |
-| AI Copilot: tìm run tốt nhất, so sánh 2 run, chẩn đoán overfitting | 3 | Must |
-| AI điều khiển giao diện: làm nổi bật run, bay camera | 3 | Must |
+| Inspector Panel: biểu đồ accuracy/loss theo epoch | 2 | Must |
+| AI Copilot: so sánh 2 run, chẩn đoán overfitting | 3 | Must |
 | AI tóm tắt experiment, gợi ý siêu tham số | 3 | Should |
 | Endpoint xoá experiment / run | 2 | Should |
 | Giao diện xem run của nhiều experiment cùng lúc (API đã hỗ trợ) | 2 | Should |
@@ -206,7 +206,6 @@ Nhà cung cấp LLM: **Gemini**, mặc định model `gemini-3.5-flash-lite` tr�
 | **Frontend** *(Phase 2)* | React 18, Vite, TypeScript, Tailwind CSS, React Three Fiber + drei, Zustand |
 | **AI** | Gemini qua SDK `google-genai`, dùng tool calling, gọi qua backend |
 | **Công cụ** | uv (quản lý gói Python), pnpm, Ruff, pytest + pytest-cov, GitHub Actions |
-| **Quản lý dự án** | ClickUp (công việc, sprint) + GitHub (code, review) |
 
 ---
 
@@ -215,12 +214,11 @@ Nhà cung cấp LLM: **Gemini**, mặc định model `gemini-3.5-flash-lite` tr�
 ```
 3d-mlops-copilot-platform/
 ├── README.md
-├── CONTRIBUTING.md               # Quy trình làm việc nhóm, quy ước branch/commit/PR
+├── CONTRIBUTING.md               # Quy ước branch, commit, kiểm tra và code
 ├── CLAUDE.md                     # Quy ước code cho dự án
 ├── .github/
 │   ├── workflows/ci.yml          # CI: lint + test cho mỗi PR
-│   ├── pull_request_template.md  # Mẫu PR
-│   └── CODEOWNERS                # Tự gán reviewer theo thư mục
+│   └── pull_request_template.md  # Mẫu PR
 ├── docs/
 │   └── PLAN.md                   # Kế hoạch chi tiết & lộ trình
 ├── frontend/                     # React + R3F (khung 3 panel, store, API client)
@@ -314,7 +312,7 @@ Chạy lại nhiều lần không bị trùng: experiment mẫu đã có sẽ đ
 
 ### Cách 2: huấn luyện thật (cần server đang chạy)
 
-Bộ thử chuẩn cho demo là 35 run trên MNIST, gồm 30 cấu hình ngẫu nhiên và 5 cấu hình cố ý xấu. Cùng `--seed` sẽ cho cùng bộ cấu hình, nên cả nhóm tái tạo được dữ liệu mà không cần chia sẻ file database. Lệnh này tự bỏ qua nếu experiment đã có run.
+Bộ thử chuẩn cho demo là 35 run trên MNIST, gồm 30 cấu hình ngẫu nhiên và 5 cấu hình cố ý xấu. Cùng `--seed` sẽ cho cùng bộ cấu hình, nên tái tạo được dữ liệu trên máy khác mà không cần chép file database. Lệnh này tự bỏ qua nếu experiment đã có run.
 
 ```bash
 uv run python scripts/train_mnist_demo.py --dataset mnist --random-search 30
@@ -428,7 +426,7 @@ curl "localhost:8000/api/runs?experiment_id=1"
 | `epochs`, `batch_size` | số nguyên ≥ 1 |
 
 > [!TIP]
-> Để các run hiển thị đúng chỗ trong không gian 3D, hãy dùng **tên key thống nhất** trong cả nhóm: `learning_rate` (không dùng `lr`), `batch_size`, `epochs`, `hidden_layers`.
+> Để các run hiển thị đúng chỗ trong không gian 3D, hãy dùng **tên key thống nhất**: `learning_rate` (không dùng `lr`), `batch_size`, `epochs`, `hidden_layers`.
 
 ---
 
@@ -466,7 +464,7 @@ with TrackingClient("http://localhost:8000") as client:
 | `LLM_MODEL` | `gemini-3.5-flash-lite` | Tên model Gemini |
 
 > [!CAUTION]
-> Không commit file `.env` (đã có trong `.gitignore`). Mỗi thành viên tự tạo `.env` trên máy mình. API key dùng chung được leader gửi riêng, **không dán vào chat nhóm hay ClickUp**.
+> Không commit file `.env` (đã có trong `.gitignore`).
 
 ---
 
@@ -487,25 +485,22 @@ Mỗi bài test dùng một database SQLite **trong bộ nhớ** riêng, nên kh
 
 | Job | Kiểm tra |
 |---|---|
-| `pr-title` | Tiêu đề PR có ID thẻ ClickUp (`ML3D-<số>`) |
 | `backend` | `ruff format --check`, `ruff check`, `pytest --cov` |
 | `frontend` | `lint`, `typecheck`, `build` (tự bỏ qua khi chưa có `frontend/package.json`) |
-
-PR chỉ được merge khi CI xanh.
 
 ---
 
 ## Lộ trình phát triển
 
-Chi tiết từng task: [`docs/PLAN.md`](docs/PLAN.md) và bảng Sprint trên ClickUp.
+Chi tiết từng task: [`docs/PLAN.md`](docs/PLAN.md).
 
-| Phase | Nội dung | Nhóm phụ trách | Trạng thái |
-|---|---|---|---|
-| 1 | **Nền tảng Backend & MLOps:** API tracking, database, validation, script demo, dữ liệu mẫu, kiểm thử | Backend | ✅ Xong |
-| 2 | **Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D theo [thiết kế](#thiết-kế-không-gian-3d), chọn trục, click/hover, Inspector Panel, camera bay tới node. Backend bổ sung `DELETE` | Web3D, Backend | ⏳ |
-| 3 | **AI Copilot:** kết nối LLM, các tool truy vấn và tool điều khiển giao diện theo [thiết kế](#thiết-kế-trợ-lý-ai), bộ câu hỏi kiểm thử độ chính xác | AI, Backend | ⏳ |
-| 4 | **Đồng bộ & hoàn thiện:** đồng bộ 3 khung, sidebar, polling run đang chạy, tối ưu hiệu năng (≥ 200 node @ 60 fps), dark mode | Web3D | ⏳ |
-| 5 | **Kiểm thử & demo:** smoke test end-to-end, benchmark, tài liệu demo, báo cáo | Data-Test, cả nhóm | ⏳ |
+| Phase | Nội dung | Trạng thái |
+|---|---|---|
+| 1 | **Nền tảng Backend & MLOps:** API tracking, database, validation, script demo, dữ liệu mẫu, kiểm thử | ✅ Xong |
+| 2 | **Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D theo [thiết kế](#thiết-kế-không-gian-3d), chọn trục, click/hover, Inspector Panel, camera bay tới node. Backend bổ sung `DELETE` | 🚧 Phần lớn đã có |
+| 3 | **AI Copilot:** kết nối LLM, các tool truy vấn và tool điều khiển giao diện theo [thiết kế](#thiết-kế-trợ-lý-ai), bộ câu hỏi kiểm thử độ chính xác | 🚧 Mới có tìm run tốt nhất |
+| 4 | **Đồng bộ & hoàn thiện:** đồng bộ 3 khung, sidebar, polling run đang chạy, tối ưu hiệu năng (≥ 200 node @ 60 fps), dark mode | ⏳ |
+| 5 | **Kiểm thử & demo:** smoke test end-to-end, benchmark, tài liệu demo, báo cáo | ⏳ |
 
 ---
 
@@ -519,26 +514,6 @@ Chi tiết từng task: [`docs/PLAN.md`](docs/PLAN.md) và bảng Sprint trên C
 
 ---
 
-## Nhóm phát triển
+## Quy ước phát triển
 
-| Vai trò | Thành viên |
-|---|---|
-| Mentor | _Tên mentor_ |
-| Leader | _Tên leader_ |
-| Web3D / Frontend (3) | _Sub-lead_, _thành viên_, _thành viên_ |
-| Backend (2) | _Sub-lead_, _thành viên_ |
-| AI integration (2) | _Sub-lead_, _thành viên_ |
-| Data / Test (1) | _Thành viên_ |
-
----
-
-## Đóng góp
-
-Đọc **[CONTRIBUTING.md](CONTRIBUTING.md)** trước khi bắt đầu. Tóm tắt:
-
-- Mọi việc đều có thẻ trên **ClickUp**. ID thẻ (`ML3D-42`) phải có trong tên branch, commit và tiêu đề PR.
-- Không push thẳng vào `main`. Mọi thay đổi đi qua Pull Request, cần 1 người duyệt và CI xanh.
-- Commit theo [Conventional Commits](https://www.conventionalcommits.org/) kèm ID thẻ: `feat(frontend): ML3D-42 thêm panel chi tiết run`.
-- Không bao giờ đưa API key vào code hay commit file `.env`.
-
-Xem thêm [`CLAUDE.md`](CLAUDE.md) để biết các lệnh build/test và quy ước kiến trúc.
+Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy ước branch, commit và code, và [`CLAUDE.md`](CLAUDE.md) cho các lệnh build/test.

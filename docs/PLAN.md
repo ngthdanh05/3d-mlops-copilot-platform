@@ -5,7 +5,7 @@
 > Version: `1.1.0-draft` · Created: 2026-11-06 · Updated: 2026-11-08 · Author: Principal System Architect
 >
 > Bản 1.1 thống nhất với README: không gian 3D theo siêu tham số và trợ lý AI dùng tool calling.
-> Quy trình làm việc nhóm nằm ở `CONTRIBUTING.md`. Công việc thực tế được theo dõi trên ClickUp.
+> Quy ước phát triển nằm ở `CONTRIBUTING.md`.
 
 ---
 
@@ -328,7 +328,7 @@ Quy tắc:
 3d-mlops-copilot/
 │
 ├── README.md                          # Hướng dẫn tổng quan
-├── CONTRIBUTING.md                    # Quy trình làm việc nhóm
+├── CONTRIBUTING.md                    # Quy ước phát triển     
 ├── CLAUDE.md                          # Quy ước code cho dự án
 ├── .github/                           # CI, CODEOWNERS, mẫu PR
 │
