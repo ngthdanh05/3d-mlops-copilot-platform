@@ -1,0 +1,28 @@
+# Tự gán người review theo thư mục.
+# Quy tắc ở DƯỚI được ưu tiên hơn quy tắc ở trên.
+# Thay ORG_NAME bằng tên GitHub Organization, LEADER_USERNAME bằng username GitHub của leader.
+# Các team (web3d, backend, ai, data-test) phải được tạo trong Organization và có quyền Write vào repo.
+
+# Mặc định: leader review mọi thứ không thuộc nhóm nào
+*                                   @LEADER_USERNAME
+
+# Tài liệu & cấu hình chung: leader
+/README.md                          @LEADER_USERNAME
+/CONTRIBUTING.md                    @LEADER_USERNAME
+/CLAUDE.md                          @LEADER_USERNAME
+/docs/                              @LEADER_USERNAME
+/.github/                           @LEADER_USERNAME @ORG_NAME/backend
+
+# Frontend / Web3D
+/frontend/                          @ORG_NAME/web3d
+
+# Backend
+/backend/                           @ORG_NAME/backend
+
+# AI Copilot (đặt sau /backend/ để được ưu tiên)
+/backend/app/**/copilot*            @ORG_NAME/ai
+/backend/app/**/copilot*/           @ORG_NAME/ai
+
+# Dữ liệu mẫu & kiểm thử
+/backend/tests/                     @ORG_NAME/data-test @ORG_NAME/backend
+/backend/app/utils/seed_data.py     @ORG_NAME/data-test

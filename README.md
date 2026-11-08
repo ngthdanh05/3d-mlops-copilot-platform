@@ -2,6 +2,7 @@
 
 > Nền tảng quản lý thực nghiệm học máy (ML experiment tracking) trong **không gian 3D**, tích hợp **trợ lý AI** giúp bạn tìm, so sánh và chẩn đoán các lần huấn luyện mô hình.
 
+[![CI](https://github.com/ORG_NAME/3d-mlops-copilot-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ORG_NAME/3d-mlops-copilot-platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-async-003B57?logo=sqlite&logoColor=white)
@@ -16,6 +17,8 @@
 - [Dự án này làm gì?](#dự-án-này-làm-gì)
 - [Tính năng](#tính-năng)
 - [Kiến trúc](#kiến-trúc)
+- [Thiết kế không gian 3D](#thiết-kế-không-gian-3d)
+- [Thiết kế trợ lý AI](#thiết-kế-trợ-lý-ai)
 - [Công nghệ sử dụng](#công-nghệ-sử-dụng)
 - [Cấu trúc thư mục](#cấu-trúc-thư-mục)
 - [Bắt đầu nhanh](#bắt-đầu-nhanh)
@@ -25,21 +28,23 @@
 - [Cấu hình](#cấu-hình)
 - [Kiểm thử](#kiểm-thử)
 - [Lộ trình phát triển](#lộ-trình-phát-triển)
-- [Quy ước đóng góp](#quy-ước-đóng-góp)
+- [Giới hạn của bản PoC](#giới-hạn-của-bản-poc)
+- [Nhóm phát triển](#nhóm-phát-triển)
+- [Đóng góp](#đóng-góp)
 
 ---
 
 ## Dự án này làm gì?
 
-Khi huấn luyện mô hình học máy, ta thường chạy **rất nhiều lần** (gọi là các *run*) với các bộ siêu tham số khác nhau: learning rate, batch size, số epoch... Theo dõi xem run nào tốt nhất, run nào bị overfit, run nào bị lỗi trong một bảng số liệu dài là việc mệt mỏi.
+Khi huấn luyện mô hình học máy, ta thường chạy **rất nhiều lần** (gọi là các *run*) với các bộ siêu tham số khác nhau: learning rate, batch size, số epoch... Theo dõi xem run nào tốt nhất, run nào bị overfit, run nào bị lỗi trong một bảng số liệu dài là việc mệt mỏi. Bảng số liệu cũng khó cho thấy **vì sao** một run tốt hơn, hay **vùng siêu tham số nào chưa được thử**.
 
 **3D-MLOps Copilot** giải quyết việc đó bằng ba thành phần:
 
 | | Thành phần | Ý nghĩa |
 |---|---|---|
 | 📊 | **Theo dõi (Track)** | Mỗi run gửi siêu tham số và chỉ số từng epoch (accuracy, loss, val_accuracy, val_loss) về một REST API, lưu vào SQLite. |
-| 🌐 | **Trực quan hoá 3D (Visualize)** | Mỗi run là một quả cầu trong không gian 3D: trục X = số epoch, Y = accuracy, Z = loss. Màu thể hiện trạng thái (🟢 hoàn thành · 🟡 đang chạy · 🔴 lỗi). Click vào quả cầu để xem chi tiết. |
-| 🤖 | **Trợ lý AI (Converse)** | Hỏi bằng ngôn ngữ tự nhiên: *"Run nào có accuracy cao nhất?"*, *"Run-002 có bị overfit không?"*. AI trả lời và **tự động bay camera tới** run tương ứng trong không gian 3D. |
+| 🌐 | **Trực quan hoá 3D (Visualize)** | Mỗi run là một quả cầu trong **không gian siêu tham số 3D**: vị trí cho biết run được cấu hình thế nào, màu và kích thước cho biết kết quả. Người dùng thấy ngay vùng nào cho kết quả tốt và vùng nào còn trống. Xem [Thiết kế không gian 3D](#thiết-kế-không-gian-3d). |
+| 🤖 | **Trợ lý AI (Converse)** | Hỏi bằng ngôn ngữ tự nhiên: *"Run nào có accuracy cao nhất?"*, *"Run-002 có bị overfit không?"*. AI lấy số liệu qua các công cụ (tool) của backend rồi trả lời, đồng thời **làm nổi bật và bay camera tới** các run liên quan. |
 
 Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đồng bộ trạng thái** với nhau.
 
@@ -52,20 +57,30 @@ Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đ�
 
 ### ✅ Đã có (Phase 1 – Backend)
 
-- REST API đầy đủ để tạo **experiment**, **run** và ghi **metrics theo từng epoch**.
+- REST API để tạo **experiment**, **run** và ghi **metrics theo từng epoch**.
 - Kiểm tra dữ liệu chặt chẽ: `learning_rate > 0`, `0 ≤ accuracy ≤ 1`, `loss ≥ 0`, `epoch ≥ 1`, không nhận NaN/vô cực, không nhận field lạ.
-- Danh sách run kèm **chỉ số của epoch cuối** (`final_accuracy`, `final_loss`, ...) — sẵn sàng để vẽ lên không gian 3D.
+- Danh sách run kèm **chỉ số của epoch cuối** (`final_accuracy`, `final_loss`, ...), sẵn sàng để vẽ lên không gian 3D.
 - Mã lỗi HTTP rõ ràng: `201` tạo mới · `404` không tìm thấy · `409` trùng lặp · `422` dữ liệu sai.
 - **Script huấn luyện demo** (scikit-learn) tự ghi log lên API.
 - **Công cụ sinh dữ liệu giả lập** với đường cong học tập thực tế (có run tốt, run overfit, run lỗi, run đang chạy).
 - Swagger UI tự động tại `/docs`.
-- 78 bài kiểm thử, độ phủ code 99%.
+- 78 bài kiểm thử, độ phủ code 99%. CI tự chạy test và lint cho mỗi Pull Request.
 
 ### 🚧 Sắp có
 
-- Không gian 3D tương tác (xoay, zoom, click, hover, camera bay tới node).
-- Inspector Panel: bảng siêu tham số + biểu đồ accuracy/loss theo epoch.
-- AI Copilot: tìm run tốt nhất, so sánh 2 run, chẩn đoán overfitting, tóm tắt experiment, gợi ý siêu tham số.
+| Tính năng | Phase | Ưu tiên |
+|---|---|---|
+| Không gian 3D: xoay, zoom, click, hover, camera bay tới node | 2 | Must |
+| Chọn trục 3D từ danh sách siêu tham số / metrics | 2 | Must |
+| Inspector Panel: bảng siêu tham số + biểu đồ accuracy/loss theo epoch | 2 | Must |
+| AI Copilot: tìm run tốt nhất, so sánh 2 run, chẩn đoán overfitting | 3 | Must |
+| AI điều khiển giao diện: làm nổi bật run, bay camera | 3 | Must |
+| AI tóm tắt experiment, gợi ý siêu tham số | 3 | Should |
+| Endpoint xoá experiment / run | 2 | Should |
+| Xem run của nhiều experiment cùng lúc | 2 | Should |
+| Tự cập nhật run đang chạy (polling) | 4 | Should |
+| Chế độ giảm chiều (PCA) khi có nhiều hơn 3 siêu tham số | 4 | Could |
+| Đóng gói client ghi log thành thư viện `pip install` | 4 | Could |
 
 ---
 
@@ -81,9 +96,9 @@ Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đ�
 │                               Backend (FastAPI)                                    │
 │  /api/experiments   /api/runs   /api/runs/{id}/metrics   /api/copilot/chat (P3)    │
 │              │                                              │                      │
-│      Service layer (tracking)                        AI Copilot Engine (P3)        │
+│      Service layer (tracking)  ◄──── tool calls ────  AI Copilot Engine (P3)       │
 │              │                                              │                      │
-│      SQLite (experiments · runs · metrics)  ◄───────────────┘ ──► LLM API          │
+│      SQLite (experiments · runs · metrics)                  └──► LLM API           │
 └────────────────────────────────────────────────────────────────────────────────────┘
         ▲
         │ POST /api/runs, /metrics
@@ -110,7 +125,71 @@ created_at           status: running |        accuracy       (0–1)
                      finished_at              logged_at
 ```
 
-Xoá một experiment sẽ xoá luôn các run và metrics của nó.
+Ở tầng database, xoá một experiment sẽ xoá luôn các run và metrics của nó (cascade). Hiện **chưa có endpoint xoá** qua API.
+
+---
+
+## Thiết kế không gian 3D
+
+> [!NOTE]
+> Phần này là **thiết kế cho Phase 2**, chưa được cài đặt.
+
+Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số liệu khó trả lời: *run tốt nằm ở vùng cấu hình nào?* và *vùng nào chưa được thử?* Vì vậy **vị trí thể hiện đầu vào (siêu tham số), còn hình thức thể hiện kết quả**.
+
+| Kênh hiển thị | Mặc định | Ghi chú |
+|---|---|---|
+| Trục X | `learning_rate` | **Thang log** (giá trị thường trải từ 1e-5 đến 1e-1) |
+| Trục Y | `batch_size` | Thang log cơ số 2 |
+| Trục Z | Siêu tham số thứ ba có trong dữ liệu (vd `hidden_layers`, `epochs`) | |
+| Màu | `final_val_accuracy` (hoặc `final_accuracy` nếu không có) | Thang màu liên tục, có chú giải |
+| Kích thước | `final_val_loss` | Loss cao → cầu nhỏ |
+| Viền / icon | Trạng thái | ● hoàn thành · ◐ đang chạy · ✕ lỗi |
+
+- Người dùng **chọn được trục** từ mọi key trong `hyperparams` và mọi metric cuối.
+- Run thiếu một siêu tham số đang dùng làm trục được đặt ở mặt phẳng "không xác định" và vẽ mờ.
+- Không dùng epoch, accuracy và loss làm 3 trục cùng lúc: accuracy và loss gần như tỉ lệ nghịch nên các điểm sẽ dồn trên một đường, còn số epoch thường giống nhau giữa các run.
+- Mục tiêu hiệu năng: ≥ 200 node ở 60 fps (dùng instanced mesh).
+
+---
+
+## Thiết kế trợ lý AI
+
+> [!NOTE]
+> Phần này là **thiết kế cho Phase 3**, chưa được cài đặt.
+
+Trợ lý dùng **tool calling (function calling)**: LLM **không** được nhận toàn bộ dữ liệu trong prompt và **không** tự đưa ra số liệu. Mọi con số phải lấy qua công cụ. Cách này tránh việc AI bịa số và vẫn chạy được khi có hàng trăm run.
+
+**Công cụ truy vấn** (chạy ở backend, gọi service layer):
+
+| Tool | Chức năng |
+|---|---|
+| `list_experiments()` | Danh sách experiment |
+| `find_best_runs(experiment_id, metric, top_k)` | Các run tốt nhất theo một metric |
+| `get_run(run_id)` | Siêu tham số + metrics từng epoch của một run |
+| `compare_runs(run_ids)` | So sánh siêu tham số và metrics cuối |
+| `detect_overfitting(run_id)` | Phân tích khoảng cách train/val qua các epoch (tính bằng code, không do LLM tự đoán) |
+
+**Công cụ điều khiển giao diện** (backend trả về dưới dạng `actions`, frontend thực thi qua Zustand store):
+
+| Tool | Chức năng |
+|---|---|
+| `highlight_runs(run_ids)` | Làm nổi bật các run |
+| `focus_camera(run_id)` | Bay camera tới một run |
+| `open_inspector(run_id)` | Mở bảng chi tiết |
+
+Ví dụ phản hồi của `/api/copilot/chat`:
+
+```json
+{
+  "message": "Run-007 có val_accuracy cao nhất (0.9644)...",
+  "actions": [
+    { "type": "highlight_runs", "run_ids": [7] },
+    { "type": "focus_camera", "run_id": 7 }
+  ]
+}
+```
+
+Nhà cung cấp LLM: **LLM_PROVIDER_TBD** *(cần chốt trước Phase 3: Gemini hoặc OpenAI)*.
 
 ---
 
@@ -120,8 +199,9 @@ Xoá một experiment sẽ xoá luôn các run và metrics của nó.
 |---|---|
 | **Backend** | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2 (async) + aiosqlite, SQLite (chế độ WAL) |
 | **Frontend** *(Phase 2)* | React 18, Vite, TypeScript, Tailwind CSS, React Three Fiber + drei, Zustand |
-| **AI** *(Phase 3)* | Gemini hoặc OpenAI, gọi qua backend |
-| **Công cụ** | uv (quản lý gói Python), pnpm, Ruff, pytest + pytest-cov |
+| **AI** *(Phase 3)* | LLM có hỗ trợ tool calling, gọi qua backend |
+| **Công cụ** | uv (quản lý gói Python), pnpm, Ruff, pytest + pytest-cov, GitHub Actions |
+| **Quản lý dự án** | ClickUp (công việc, sprint) + GitHub (code, review) |
 
 ---
 
@@ -130,7 +210,12 @@ Xoá một experiment sẽ xoá luôn các run và metrics của nó.
 ```
 3d-mlops-copilot-platform/
 ├── README.md
+├── CONTRIBUTING.md               # Quy trình làm việc nhóm, quy ước branch/commit/PR
 ├── CLAUDE.md                     # Quy ước code cho dự án
+├── .github/
+│   ├── workflows/ci.yml          # CI: lint + test cho mỗi PR
+│   ├── pull_request_template.md  # Mẫu PR
+│   └── CODEOWNERS                # Tự gán reviewer theo thư mục
 ├── docs/
 │   └── PLAN.md                   # Kế hoạch chi tiết & lộ trình
 ├── frontend/                     # (Phase 2 – chưa khởi tạo)
@@ -159,55 +244,44 @@ Xoá một experiment sẽ xoá luôn các run và metrics của nó.
 ### Yêu cầu
 
 - **Python 3.11+**
-- **[uv](https://docs.astral.sh/uv/)** — trình quản lý gói Python. Cài bằng một trong hai cách:
-
-  ```bash
-  pip install uv
-  ```
-
-  hoặc xem hướng dẫn chính thức tại [docs.astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/).
+- **[uv](https://docs.astral.sh/uv/)**: trình quản lý gói Python. Cài bằng `pip install uv` hoặc xem [hướng dẫn chính thức](https://docs.astral.sh/uv/getting-started/installation/).
+- *(Phase 2)* **Node.js 20+** và **pnpm** (`npm install -g pnpm`).
 
 > [!TIP]
 > Trên Windows, nếu cài bằng `pip install --user uv` mà gõ `uv` báo "not found", hãy thêm thư mục `%APPDATA%\Python\Python3xx\Scripts` vào biến môi trường `PATH`.
 
-### 1. Cài đặt dependencies
+### Backend
 
 ```bash
 cd backend
-uv sync
-```
-
-Lệnh này tạo môi trường ảo `backend/.venv` và cài toàn bộ thư viện (kể cả công cụ dev như pytest, ruff, scikit-learn).
-
-### 2. (Tuỳ chọn) Tạo file cấu hình
-
-```bash
-cp .env.example .env
-```
-
-Không có `.env` thì dùng giá trị mặc định — đủ để chạy ngay.
-
-### 3. Chạy server
-
-```bash
-uv run uvicorn app.main:app --reload
+uv sync                                  # tạo .venv và cài thư viện (kể cả công cụ dev)
+cp .env.example .env                     # tuỳ chọn, không có .env thì dùng mặc định
+uv run uvicorn app.main:app --reload     # chạy server
 ```
 
 Khi khởi động, server tự tạo file `backend/mlops.db` cùng các bảng.
 
 | Địa chỉ | Nội dung |
 |---|---|
-| http://localhost:8000/docs | Swagger UI — thử trực tiếp mọi API trên trình duyệt |
+| http://localhost:8000/docs | Swagger UI, thử trực tiếp mọi API trên trình duyệt |
 | http://localhost:8000/redoc | Tài liệu API dạng ReDoc |
 | http://localhost:8000/api/health | Kiểm tra server sống: `{"status": "ok"}` |
+
+### Frontend *(Phase 2 – sẽ cập nhật khi khởi tạo)*
+
+```bash
+cd frontend
+pnpm install
+pnpm dev          # mở http://localhost:5173
+```
+
+Frontend gọi backend ở `http://localhost:8000`. Hãy chạy backend trước.
 
 ---
 
 ## Tạo dữ liệu mẫu
 
-Có hai cách để có dữ liệu thử nghiệm.
-
-### Cách 1 — Dữ liệu giả lập (nhanh, không cần server)
+### Cách 1: dữ liệu giả lập (nhanh, không cần server)
 
 ```bash
 cd backend
@@ -215,6 +289,9 @@ uv run python -m app.utils.seed_data
 ```
 
 Tạo 2 experiment là `MNIST-CNN-v1` và `CIFAR10-ResNet18`, mỗi cái 15 run với đường cong học tập trông như thật: có run tốt, run overfit, run bị phân kỳ rồi lỗi, run đang chạy dở.
+
+> [!NOTE]
+> Đây là dữ liệu **giả lập**. Tên experiment chỉ mô phỏng bối cảnh thực tế, không có mô hình CNN hay ResNet nào được huấn luyện thật.
 
 | Tham số | Ý nghĩa |
 |---|---|
@@ -224,14 +301,14 @@ Tạo 2 experiment là `MNIST-CNN-v1` và `CIFAR10-ResNet18`, mỗi cái 15 run 
 
 Chạy lại nhiều lần không bị trùng: experiment mẫu đã có sẽ được bỏ qua.
 
-### Cách 2 — Huấn luyện thật (cần server đang chạy)
+### Cách 2: huấn luyện thật (cần server đang chạy)
 
 ```bash
 cd backend
 uv run python scripts/train_mnist_demo.py --sweep
 ```
 
-Huấn luyện mạng nơ-ron (`MLPClassifier` của scikit-learn) với 9 bộ siêu tham số khác nhau, mỗi epoch gửi kết quả lên API. Mặc định dùng tập ảnh chữ số 8×8 có sẵn trong scikit-learn (không cần tải).
+Huấn luyện mạng nơ-ron nhiều lớp (`MLPClassifier` của scikit-learn) với 9 bộ siêu tham số khác nhau, mỗi epoch gửi kết quả lên API. Mặc định dùng **tập ảnh chữ số 8×8 có sẵn trong scikit-learn** (không cần tải), không phải MNIST gốc 28×28.
 
 ```bash
 # Một run với siêu tham số tự chọn
@@ -261,8 +338,13 @@ Tất cả endpoint có tiền tố `/api`. Tài liệu đầy đủ, có thể 
 | `GET` | `/api/runs/{id}` | Chi tiết run kèm toàn bộ metrics theo epoch | 200 · 404 |
 | `PUT` | `/api/runs/{id}` | Cập nhật trạng thái: `completed` / `failed` / `running` | 200 · 404 · 409 |
 | `POST` | `/api/runs/{id}/metrics` | Ghi metrics cho 1 epoch | 201 · 404 · 409 epoch đã ghi |
+| `POST` | `/api/copilot/chat` | *(Phase 3)* Hỏi trợ lý AI, trả về `message` + `actions` | — |
 
 Dữ liệu gửi lên sai định dạng luôn trả về **422**, kèm thông báo chỉ rõ field nào sai.
+
+> [!NOTE]
+> - `GET /api/runs` hiện **bắt buộc** có `experiment_id`. Dự kiến cho phép bỏ trống để xem run của mọi experiment (Phase 2).
+> - Chưa có endpoint `DELETE`. Dự kiến bổ sung ở Phase 2.
 
 ### Ví dụ với `curl`
 
@@ -327,6 +409,9 @@ curl "localhost:8000/api/runs?experiment_id=1"
 | `learning_rate` hoặc `lr` | số > 0 |
 | `epochs`, `batch_size` | số nguyên ≥ 1 |
 
+> [!TIP]
+> Để các run hiển thị đúng chỗ trong không gian 3D, hãy dùng **tên key thống nhất** trong cả nhóm: `learning_rate` (không dùng `lr`), `batch_size`, `epochs`, `hidden_layers`.
+
 ---
 
 ## Ghi log từ script huấn luyện của bạn
@@ -363,7 +448,7 @@ with TrackingClient("http://localhost:8000") as client:
 | `LLM_MODEL` | — | Tên model LLM *(Phase 3)* |
 
 > [!CAUTION]
-> Không commit file `.env` (đã có trong `.gitignore`).
+> Không commit file `.env` (đã có trong `.gitignore`). Mỗi thành viên tự tạo `.env` trên máy mình. API key dùng chung được leader gửi riêng, **không dán vào chat nhóm hay ClickUp**.
 
 ---
 
@@ -380,32 +465,62 @@ uv run ruff format .          # định dạng code
 
 Mỗi bài test dùng một database SQLite **trong bộ nhớ** riêng, nên không ảnh hưởng tới `mlops.db` của bạn.
 
+**CI (GitHub Actions)** chạy tự động cho mỗi Pull Request vào `main`:
+
+| Job | Kiểm tra |
+|---|---|
+| `pr-title` | Tiêu đề PR có ID thẻ ClickUp (`ML3D-<số>`) |
+| `backend` | `ruff format --check`, `ruff check`, `pytest --cov` |
+| `frontend` | `lint`, `typecheck`, `build` (tự bỏ qua khi chưa có `frontend/package.json`) |
+
+PR chỉ được merge khi CI xanh.
+
 ---
 
 ## Lộ trình phát triển
 
-Chi tiết từng task xem tại [`docs/PLAN.md`](docs/PLAN.md).
+Chi tiết từng task: [`docs/PLAN.md`](docs/PLAN.md) và bảng Sprint trên ClickUp.
 
-- [x] **Phase 1 — Nền tảng Backend & MLOps:** API tracking, database, validation, script demo, dữ liệu mẫu, kiểm thử
-- [ ] **Phase 2 — Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D, click/hover, Inspector Panel, camera bay tới node
-- [ ] **Phase 3 — AI Copilot:** kết nối LLM, xây dựng ngữ cảnh từ dữ liệu run, prompt template, phân tích phản hồi thành hành động (highlight, focus camera)
-- [ ] **Phase 4 — Đồng bộ & hoàn thiện giao diện:** đồng bộ 3 khung, sidebar, hiệu ứng, tối ưu hiệu năng (≥ 200 node @ 60 fps), dark mode
-- [ ] **Phase 5 — Kiểm thử & demo:** smoke test end-to-end, benchmark, tài liệu demo
+| Phase | Nội dung | Nhóm phụ trách | Trạng thái |
+|---|---|---|---|
+| 1 | **Nền tảng Backend & MLOps:** API tracking, database, validation, script demo, dữ liệu mẫu, kiểm thử | Backend | ✅ Xong |
+| 2 | **Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D theo [thiết kế](#thiết-kế-không-gian-3d), chọn trục, click/hover, Inspector Panel, camera bay tới node. Backend bổ sung `DELETE` và lọc run không cần `experiment_id` | Web3D, Backend | ⏳ |
+| 3 | **AI Copilot:** kết nối LLM, các tool truy vấn và tool điều khiển giao diện theo [thiết kế](#thiết-kế-trợ-lý-ai), bộ câu hỏi kiểm thử độ chính xác | AI, Backend | ⏳ |
+| 4 | **Đồng bộ & hoàn thiện:** đồng bộ 3 khung, sidebar, polling run đang chạy, tối ưu hiệu năng (≥ 200 node @ 60 fps), dark mode | Web3D | ⏳ |
+| 5 | **Kiểm thử & demo:** smoke test end-to-end, benchmark, tài liệu demo, báo cáo | Data-Test, cả nhóm | ⏳ |
 
-### Giới hạn của bản PoC
+---
+
+## Giới hạn của bản PoC
 
 - Chưa có đăng nhập, chỉ một người dùng, chạy trên localhost.
 - SQLite phù hợp cho thử nghiệm. Thiết kế cho tối đa khoảng 500 run và 50 epoch mỗi run.
+- **Metrics cố định 4 loại** (`accuracy`, `loss`, `val_accuracy`, `val_loss`), phù hợp bài toán **phân loại**. Chưa hỗ trợ metric khác như F1, MSE, R².
+- Chưa lưu file model (artifact).
 - Cần trình duyệt hỗ trợ WebGL 2.0 (Chrome, Edge, Firefox).
 
 ---
 
-## Quy ước đóng góp
+## Nhóm phát triển
 
-- **Python:** PEP 8, kiểm tra bằng Ruff (`line-length = 100`). Chạy `uv run ruff format . && uv run ruff check .` trước khi commit.
-- **Frontend:** dùng các Zustand store (`useRunStore`, `useCameraStore`, `useChatStore`) làm nguồn trạng thái duy nhất giữa các khung.
-- **Bảo mật:** không bao giờ đưa API key của LLM vào code frontend.
-- **Commit:** theo [Conventional Commits](https://www.conventionalcommits.org/), ví dụ `feat(backend): ...`, `fix(frontend): ...`, `docs: ...`.
-- Mở Pull Request vào `main`. Toàn bộ test phải pass.
+| Vai trò | Thành viên |
+|---|---|
+| Mentor | _Tên mentor_ |
+| Leader | _Tên leader_ |
+| Web3D / Frontend (3) | _Sub-lead_, _thành viên_, _thành viên_ |
+| Backend (2) | _Sub-lead_, _thành viên_ |
+| AI integration (2) | _Sub-lead_, _thành viên_ |
+| Data / Test (1) | _Thành viên_ |
+
+---
+
+## Đóng góp
+
+Đọc **[CONTRIBUTING.md](CONTRIBUTING.md)** trước khi bắt đầu. Tóm tắt:
+
+- Mọi việc đều có thẻ trên **ClickUp**. ID thẻ (`ML3D-42`) phải có trong tên branch, commit và tiêu đề PR.
+- Không push thẳng vào `main`. Mọi thay đổi đi qua Pull Request, cần 1 người duyệt và CI xanh.
+- Commit theo [Conventional Commits](https://www.conventionalcommits.org/) kèm ID thẻ: `feat(frontend): ML3D-42 thêm panel chi tiết run`.
+- Không bao giờ đưa API key vào code hay commit file `.env`.
 
 Xem thêm [`CLAUDE.md`](CLAUDE.md) để biết các lệnh build/test và quy ước kiến trúc.
