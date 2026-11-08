@@ -1,6 +1,11 @@
+from typing import Literal
+
 from pydantic import Field
 
 from app.schemas.base import InputSchema, NonNegativeFloat, ORMSchema, Probability, UTCDateTime
+
+RankingMetric = Literal["accuracy", "loss", "val_accuracy", "val_loss"]
+"""Per-epoch metrics that runs can be ranked by."""
 
 
 class MetricCreate(InputSchema):

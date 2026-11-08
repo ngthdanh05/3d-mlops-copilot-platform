@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Huỷ lần chạy cũ khi có commit mới trên cùng PR/branch
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------
+  # 1. Backend: format, lint, test
+  # ------------------------------------------------------------------
+  backend:
+    name: backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cài uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Cài Python và dependencies
+        run: |
+          uv python install 3.11
+          uv sync --python 3.11
+
+      - name: Ruff format (kiểm tra)
+        run: uv run ruff format --check .
+
+      - name: Ruff lint
+        run: uv run ruff check --output-format=github .
+
+      - name: Pytest + coverage
+        run: uv run pytest --cov --cov-report=term-missing
+
+  # ------------------------------------------------------------------
+  # 2. Frontend: lint, typecheck, build
+  #    Tự bỏ qua cho đến khi frontend/package.json tồn tại (Phase 2).
+  # ------------------------------------------------------------------
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Kiểm tra frontend đã được khởi tạo chưa
+        id: detect
+        working-directory: .
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Chưa có frontend/package.json, bỏ qua job frontend."
+          fi
+
+      - name: Cài Node.js
+        if: steps.detect.outputs.exists == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      - name: Cài pnpm
+        if: steps.detect.outputs.exists == 'true'
+        run: npm install -g pnpm@10
+
+      - name: Cài dependencies
+        if: steps.detect.outputs.exists == 'true'
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            echo "::warning::Chưa có pnpm-lock.yaml. Hãy commit file lock để build ổn định."
+            pnpm install
+          fi
+
+      - name: Lint
+        if: steps.detect.outputs.exists == 'true'
+        run: pnpm run --if-present lint
+
+      - name: Typecheck
+        if: steps.detect.outputs.exists == 'true'
+        run: pnpm run --if-present typecheck
+
+      - name: Build
+        if: steps.detect.outputs.exists == 'true'
+        run: pnpm run build

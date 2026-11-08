@@ -46,7 +46,7 @@ class Profile:
 
 PROFILES: tuple[Profile, ...] = (
     Profile(
-        name="MNIST-CNN-v1",
+        name="mock-mnist-cnn",
         description="[seed] Synthetic CNN runs on MNIST for frontend development",
         model="cnn-small",
         peak_accuracy=0.995,
@@ -55,7 +55,7 @@ PROFILES: tuple[Profile, ...] = (
         best_lr=1e-3,
     ),
     Profile(
-        name="CIFAR10-ResNet18",
+        name="mock-cifar10-resnet18",
         description="[seed] Synthetic ResNet-18 runs on CIFAR-10 for frontend development",
         model="resnet18",
         peak_accuracy=0.935,
