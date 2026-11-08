@@ -1,5 +1,6 @@
 """Tools that read experiment data. They go through the service layer, never the DB."""
 
+from statistics import median
 from typing import Any
 
 from pydantic import Field
@@ -23,10 +24,13 @@ async def _find_best_runs(context: ToolContext, args: FindBestRunsArgs) -> dict[
         context.db,
         args.metric,
         experiment_id=args.experiment_id or context.experiment_id,
-        top_k=args.top_k,
+        top_k=None,
     )
+    values = [value for _, value in ranked]
     return {
         "metric": args.metric,
+        "completed_runs": len(ranked),
+        "median_value": median(values) if values else None,
         "runs": [
             {
                 "run_id": run.id,
@@ -34,7 +38,7 @@ async def _find_best_runs(context: ToolContext, args: FindBestRunsArgs) -> dict[
                 "value": value,
                 "hyperparams": run.hyperparams,
             }
-            for run, value in ranked
+            for run, value in ranked[: args.top_k]
         ],
     }
 

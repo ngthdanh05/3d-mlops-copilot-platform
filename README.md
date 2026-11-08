@@ -145,6 +145,7 @@ Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số 
 | Kích thước | `final_val_loss` | Loss cao → cầu nhỏ |
 | Viền / icon | Trạng thái | ● hoàn thành · ◐ đang chạy · ✕ lỗi |
 
+- Đầu đồ thị luôn có một câu kết luận tính từ dữ liệu. Run đang chọn hoặc được AI làm nổi bật có nhãn, đường gióng xuống trục, và các run còn lại mờ đi.
 - Người dùng **chọn được trục** từ mọi key **dạng số** trong `hyperparams` và mọi metric cuối.
 - Key không phải số (`optimizer` là chuỗi, `hidden_layers` là danh sách) chưa làm trục được ở PoC, nhưng vẫn hiện trong Inspector Panel.
 - Run thiếu một siêu tham số đang dùng làm trục được đặt ở mặt phẳng "không xác định" và vẽ mờ.

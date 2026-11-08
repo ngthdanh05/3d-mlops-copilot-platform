@@ -1,5 +1,6 @@
 """Copilot tool-calling loop, tools and endpoint."""
 
+import json
 from dataclasses import dataclass, field
 
 from app.main import app
@@ -220,9 +221,45 @@ async def test_llm_failure_gives_friendly_message(client):
 
 
 async def test_empty_reply_has_fallback_message(client):
-    use_llm(ScriptedLLM([LLMReply()]))
+    llm = use_llm(ScriptedLLM([LLMReply(), LLMReply()]))
     body = (await client.post(CHAT, json={"message": "q"})).json()
     assert body["message"]
+    assert len(llm.seen) == 2  # asked again exactly once
+
+
+async def test_silent_stop_after_tools_gets_nudged_for_the_answer(client):
+    exp = await make_experiment(client)
+    run = await make_run(client, exp, "r", 0.9, 0.1)
+    use_llm(
+        ScriptedLLM(
+            [
+                LLMReply(tool_calls=[call("focus_camera", run_id=run)]),
+                LLMReply(),
+                LLMReply(text="final answer"),
+            ]
+        )
+    )
+
+    body = (await client.post(CHAT, json={"message": "q"})).json()
+
+    assert body == {
+        "message": "final answer",
+        "actions": [{"type": "focus_camera", "run_id": run}],
+    }
+
+
+async def test_find_best_runs_gives_context_to_explain_the_result(client):
+    exp = await make_experiment(client)
+    for name, accuracy in [("a", 0.6), ("b", 0.7), ("c", 0.9)]:
+        await make_run(client, exp, name, accuracy, 0.3)
+    llm = use_llm(ScriptedLLM([LLMReply(tool_calls=[call("find_best_runs")]), LLMReply(text="ok")]))
+
+    await client.post(CHAT, json={"message": "q", "experiment_id": exp})
+
+    result = json.loads(llm.seen[1][-1].content)
+    assert result["completed_runs"] == 3
+    assert result["median_value"] == 0.7
+    assert [run["run_name"] for run in result["runs"]] == ["c"]
 
 
 async def test_request_validation(client):

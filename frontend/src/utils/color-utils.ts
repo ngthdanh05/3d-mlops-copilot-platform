@@ -32,7 +32,7 @@ interface Domain {
   max: number
 }
 
-function colorMetric(run: RunSummary): number | null {
+export function colorMetric(run: RunSummary): number | null {
   return run.final_val_accuracy ?? run.final_accuracy
 }
 

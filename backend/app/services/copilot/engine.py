@@ -33,6 +33,7 @@ _TOOL_DEFINITIONS = [
 ]
 
 _LLM_ERROR_MESSAGE = "Trợ lý AI đang gặp sự cố. Bạn hãy thử lại sau ít phút."
+_ANSWER_NOW_PROMPT = "Now write your final answer to my question, following your rules."
 _RATE_LIMIT_MESSAGE = "Đã chạm giới hạn lượt gọi miễn phí của Gemini. Bạn hãy thử lại sau một phút."
 _EMPTY_REPLY_MESSAGE = "Trợ lý AI không đưa ra được câu trả lời. Bạn hãy thử hỏi lại."
 _TOO_MANY_ROUNDS_MESSAGE = "Câu hỏi này cần quá nhiều bước tra cứu. Bạn hãy hỏi cụ thể hơn."
@@ -57,14 +58,20 @@ async def _run_tool(call: ToolCall, context: ToolContext) -> dict[str, Any]:
 async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> ChatResponse:
     context = ToolContext(db=db, experiment_id=request.experiment_id)
     messages = [LLMMessage(role="user", content=request.message)]
+    nudged = False
 
     try:
         for _ in range(MAX_TOOL_ROUNDS):
             reply = await llm.complete(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS)
             if not reply.tool_calls:
-                return ChatResponse(
-                    message=reply.text or _EMPTY_REPLY_MESSAGE, actions=context.actions
-                )
+                if reply.text or nudged:
+                    return ChatResponse(
+                        message=reply.text or _EMPTY_REPLY_MESSAGE, actions=context.actions
+                    )
+                # Models sometimes stop silently after their last tool call.
+                nudged = True
+                messages.append(LLMMessage(role="user", content=_ANSWER_NOW_PROMPT))
+                continue
 
             messages.append(
                 LLMMessage(
