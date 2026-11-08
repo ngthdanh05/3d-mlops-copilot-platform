@@ -12,6 +12,7 @@ from app.services.copilot.llm_client import (
     LLMClient,
     LLMError,
     LLMMessage,
+    LLMRateLimitError,
     ToolCall,
     ToolDefinition,
 )
@@ -32,6 +33,7 @@ _TOOL_DEFINITIONS = [
 ]
 
 _LLM_ERROR_MESSAGE = "Trợ lý AI đang gặp sự cố. Bạn hãy thử lại sau ít phút."
+_RATE_LIMIT_MESSAGE = "Đã chạm giới hạn lượt gọi miễn phí của Gemini. Bạn hãy thử lại sau một phút."
 _EMPTY_REPLY_MESSAGE = "Trợ lý AI không đưa ra được câu trả lời. Bạn hãy thử hỏi lại."
 _TOO_MANY_ROUNDS_MESSAGE = "Câu hỏi này cần quá nhiều bước tra cứu. Bạn hãy hỏi cụ thể hơn."
 
@@ -82,6 +84,9 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
                         content=json.dumps(result, ensure_ascii=False),
                     )
                 )
+    except LLMRateLimitError:
+        logger.warning("LLM quota exceeded")
+        return ChatResponse(message=_RATE_LIMIT_MESSAGE, actions=context.actions)
     except LLMError:
         logger.exception("LLM call failed")
         return ChatResponse(message=_LLM_ERROR_MESSAGE)

@@ -7,7 +7,7 @@ from functools import lru_cache
 from typing import Any, Literal, Protocol
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from app.config import get_settings
 
@@ -16,7 +16,11 @@ _GEMINI_TIMEOUT_MS = 30_000
 
 
 class LLMError(Exception):
-    """The provider failed (timeout, quota, malformed reply...)."""
+    """The provider failed (timeout, malformed reply...)."""
+
+
+class LLMRateLimitError(LLMError):
+    """The provider's quota is used up for now."""
 
 
 @dataclass(frozen=True)
@@ -105,6 +109,7 @@ class FakeLLMClient:
 
 def _to_gemini_contents(messages: list[LLMMessage]) -> list[types.Content]:
     contents: list[types.Content] = []
+    previous_role: str | None = None
     for message in messages:
         if message.role == "user":
             contents.append(
@@ -121,10 +126,12 @@ def _to_gemini_contents(messages: list[LLMMessage]) -> list[types.Content]:
                     response=json.loads(message.content or "{}"),
                 )
             )
-            if contents and contents[-1].role == "tool":
+            if previous_role == "tool":
                 contents[-1].parts.append(part)
             else:
-                contents.append(types.Content(role="tool", parts=[part]))
+                # The API rejects role="tool": function results are sent as a user turn.
+                contents.append(types.Content(role="user", parts=[part]))
+        previous_role = message.role
     return contents
 
 
@@ -172,7 +179,11 @@ class GeminiLLMClient:
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 ),
             )
-        except Exception as exc:  # the SDK raises API, HTTP-library and timeout errors alike
+        except errors.APIError as exc:
+            if exc.code == 429:
+                raise LLMRateLimitError("Gemini quota exceeded") from exc
+            raise LLMError(f"Gemini API error {exc.code}") from exc
+        except Exception as exc:  # network and timeout errors from the SDK's HTTP library
             raise LLMError(f"Gemini request failed: {type(exc).__name__}") from exc
         return _from_gemini_response(response)
 

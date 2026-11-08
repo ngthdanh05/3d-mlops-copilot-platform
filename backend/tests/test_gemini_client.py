@@ -15,6 +15,7 @@ from app.services.copilot.llm_client import (
     GeminiLLMClient,
     LLMError,
     LLMMessage,
+    LLMRateLimitError,
     ToolDefinition,
     get_llm_client,
 )
@@ -111,7 +112,7 @@ async def test_tool_round_trip_keeps_signature_and_matches_results():
     model_turn, tool_turn = server.requests[1]["contents"][1:]
     assert model_turn["role"] == "model"
     assert model_turn["parts"][0]["thoughtSignature"] == "c2ln"
-    assert tool_turn["role"] == "tool"
+    assert tool_turn["role"] == "user"  # the live API rejects role="tool"
     assert [p["functionResponse"] for p in tool_turn["parts"]] == [
         {"id": "c1", "name": "highlight_runs", "response": {}},
         {"id": "c2", "name": "focus_camera", "response": {"focused": 7}},
@@ -140,6 +141,27 @@ async def test_api_errors_become_llm_error(status):
     )
     with pytest.raises(LLMError):
         await server.client().complete("s", [USER], TOOLS)
+
+
+async def test_quota_error_is_distinguished():
+    server = FakeGeminiServer(
+        *[httpx.Response(429, json={"error": {"code": 429, "message": "x"}}) for _ in range(10)]
+    )
+    with pytest.raises(LLMRateLimitError):
+        await server.client().complete("s", [USER], TOOLS)
+
+
+async def test_quota_error_tells_the_user_to_wait(client):
+    server = FakeGeminiServer(
+        *[httpx.Response(429, json={"error": {"code": 429, "message": "x"}}) for _ in range(10)]
+    )
+    gemini = server.client()
+    app.dependency_overrides[get_llm_client] = lambda: gemini
+
+    response = await client.post("/api/copilot/chat", json={"message": "q"})
+
+    assert response.status_code == 200
+    assert "giới hạn" in response.json()["message"]
 
 
 async def test_full_chat_through_gemini_client(client):
