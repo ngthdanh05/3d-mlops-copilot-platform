@@ -330,7 +330,7 @@ Quy tắc:
 ├── README.md                          # Hướng dẫn tổng quan
 ├── CONTRIBUTING.md                    # Quy ước phát triển     
 ├── CLAUDE.md                          # Quy ước code cho dự án
-├── .github/                           # CI, CODEOWNERS, mẫu PR
+├── .github/                           # CI, mẫu PR
 │
 ├── backend/                           # ═══ Python FastAPI Backend ═══
 │   ├── pyproject.toml                 # Python dependencies (uv/pip)
