@@ -3,7 +3,16 @@
 import json
 import unicodedata
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Literal, Protocol
+
+from google import genai
+from google.genai import types
+
+from app.config import get_settings
+
+DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite"
+_GEMINI_TIMEOUT_MS = 30_000
 
 
 class LLMError(Exception):
@@ -30,12 +39,15 @@ class LLMMessage:
     content: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
     tool_call_id: str | None = None
+    tool_name: str | None = None
+    provider_content: Any = None  # the assistant turn exactly as the provider returned it
 
 
 @dataclass(frozen=True)
 class LLMReply:
     text: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    provider_content: Any = None
 
 
 class LLMClient(Protocol):
@@ -91,6 +103,88 @@ class FakeLLMClient:
         )
 
 
+def _to_gemini_contents(messages: list[LLMMessage]) -> list[types.Content]:
+    contents: list[types.Content] = []
+    for message in messages:
+        if message.role == "user":
+            contents.append(
+                types.Content(role="user", parts=[types.Part.from_text(text=message.content or "")])
+            )
+        elif message.role == "assistant":
+            # Resent unchanged: its parts can carry thought signatures the model needs back.
+            contents.append(message.provider_content)
+        else:
+            part = types.Part(
+                function_response=types.FunctionResponse(
+                    id=message.tool_call_id or None,
+                    name=message.tool_name,
+                    response=json.loads(message.content or "{}"),
+                )
+            )
+            if contents and contents[-1].role == "tool":
+                contents[-1].parts.append(part)
+            else:
+                contents.append(types.Content(role="tool", parts=[part]))
+    return contents
+
+
+def _from_gemini_response(response: types.GenerateContentResponse) -> LLMReply:
+    content = response.candidates[0].content if response.candidates else None
+    parts = (content.parts if content else None) or []
+    return LLMReply(
+        text="".join(p.text for p in parts if p.text and not p.thought) or None,
+        tool_calls=[
+            ToolCall(
+                id=p.function_call.id or "",
+                name=p.function_call.name or "",
+                arguments=p.function_call.args or {},
+            )
+            for p in parts
+            if p.function_call
+        ],
+        provider_content=content,
+    )
+
+
+class GeminiLLMClient:
+    def __init__(self, client: genai.Client, model: str) -> None:
+        self._client = client
+        self._model = model
+
+    async def complete(
+        self, system: str, messages: list[LLMMessage], tools: list[ToolDefinition]
+    ) -> LLMReply:
+        declarations = [
+            types.FunctionDeclaration(
+                name=tool.name,
+                description=tool.description,
+                parameters_json_schema=tool.parameters,
+            )
+            for tool in tools
+        ]
+        try:
+            response = await self._client.aio.models.generate_content(
+                model=self._model,
+                contents=_to_gemini_contents(messages),
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    tools=[types.Tool(function_declarations=declarations)],
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                ),
+            )
+        except Exception as exc:  # the SDK raises API, HTTP-library and timeout errors alike
+            raise LLMError(f"Gemini request failed: {type(exc).__name__}") from exc
+        return _from_gemini_response(response)
+
+
+@lru_cache
 def get_llm_client() -> LLMClient:
-    """Return the configured client. Only the stand-in exists until a provider is chosen."""
-    return FakeLLMClient()
+    """Gemini when `LLM_API_KEY` is set, otherwise the stand-in."""
+    settings = get_settings()
+    if not settings.llm_api_key:
+        return FakeLLMClient()
+    client = genai.Client(
+        api_key=settings.llm_api_key,
+        http_options=types.HttpOptions(timeout=_GEMINI_TIMEOUT_MS),
+    )
+    return GeminiLLMClient(client, settings.llm_model or DEFAULT_GEMINI_MODEL)

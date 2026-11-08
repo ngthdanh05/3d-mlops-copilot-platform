@@ -65,7 +65,12 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
                 )
 
             messages.append(
-                LLMMessage(role="assistant", content=reply.text, tool_calls=reply.tool_calls)
+                LLMMessage(
+                    role="assistant",
+                    content=reply.text,
+                    tool_calls=reply.tool_calls,
+                    provider_content=reply.provider_content,
+                )
             )
             for call in reply.tool_calls:
                 result = await _run_tool(call, context)
@@ -73,6 +78,7 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
                     LLMMessage(
                         role="tool",
                         tool_call_id=call.id,
+                        tool_name=call.name,
                         content=json.dumps(result, ensure_ascii=False),
                     )
                 )
