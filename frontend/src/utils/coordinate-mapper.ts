@@ -4,6 +4,10 @@ import type { JsonValue, RunSummary } from '../lib/types'
 export const SCENE_SIZE = 10
 /** Shifts plotted coordinates so the cube is centered on the world origin. */
 export const SCENE_CENTERING_OFFSET = -SCENE_SIZE / 2
+export const CAMERA_HOME = {
+  position: [13, 9, 13] as [number, number, number],
+  target: [0, -1, 0] as [number, number, number],
+}
 /** Where runs missing an axis key are placed, just outside the plotted range. */
 export const UNKNOWN_POSITION = -1.5
 
@@ -34,6 +38,8 @@ export interface SceneLayout {
   y: Axis
   /** Null when no numeric hyperparameter varies: the scene is flat along Z. */
   z: Axis | null
+  /** Hyperparameters currently used as axes. */
+  axisKeys: string[]
   nodes: RunNodeLayout[]
 }
 
@@ -106,11 +112,11 @@ export function layoutRuns(runs: RunSummary[]): SceneLayout {
     }
   })
 
-  return { x, y, z, nodes }
+  return { x, y, z, axisKeys: [x.key, y.key, ...(z ? [z.key] : [])], nodes }
 }
 
-function formatValue(value: number, scale: AxisScale): string {
-  if (scale === 'log10') return value.toExponential(0).replace('e+', 'e')
+/** Short human form of a number: 0.00043, 256, 0.1. */
+export function formatNumber(value: number): string {
   return String(Number(value.toPrecision(3)))
 }
 
@@ -138,7 +144,7 @@ export function axisTicks(axis: Axis): AxisTick[] {
     axis.min === null || axis.max === null
       ? []
       : tickPoints(axis, axis.min, axis.max).map((scaled) => ({
-          label: formatValue(fromScaled(scaled, axis.scale), axis.scale),
+          label: formatNumber(fromScaled(scaled, axis.scale)),
           position: toPosition(scaled, axis),
         }))
   if (axis.hasMissing) ticks.push({ label: 'không xác định', position: UNKNOWN_POSITION })

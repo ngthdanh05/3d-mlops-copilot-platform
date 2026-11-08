@@ -1,9 +1,15 @@
 import { OrbitControls } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
+import { useCameraStore } from '../../store/useCameraStore'
 import { useRunStore } from '../../store/useRunStore'
 import { encodeRuns } from '../../utils/color-utils'
-import { layoutRuns, SCENE_CENTERING_OFFSET } from '../../utils/coordinate-mapper'
+import {
+  CAMERA_HOME,
+  layoutRuns,
+  SCENE_CENTERING_OFFSET,
+} from '../../utils/coordinate-mapper'
+import { summarizeBestRuns } from '../../utils/insights'
 import { AxesLabels } from './AxesLabels'
 import { CameraController } from './CameraController'
 import { ColorLegend } from './ColorLegend'
@@ -15,12 +21,23 @@ interface SceneProps {
   hasError: boolean
 }
 
+function resetView() {
+  const { highlightRuns, selectRun } = useRunStore.getState()
+  highlightRuns([])
+  selectRun(null)
+  useCameraStore.getState().setTarget(null)
+}
+
 export function Scene({ isLoading, hasError }: SceneProps) {
   const runs = useRunStore((state) => state.runs)
   const hasExperiment = useRunStore((state) => state.selectedExperimentId !== null)
+  const hasFocus = useRunStore(
+    (state) => state.selectedRunId !== null || state.highlightedRunIds.length > 0,
+  )
 
   const layout = useMemo(() => layoutRuns(runs), [runs])
   const encodings = useMemo(() => encodeRuns(runs), [runs])
+  const takeaway = useMemo(() => summarizeBestRuns(runs, layout.axisKeys), [runs, layout])
 
   let message: string | null = null
   if (hasError) {
@@ -37,17 +54,31 @@ export function Scene({ isLoading, hasError }: SceneProps) {
     <div className="relative h-full w-full">
       {runs.length > 0 && (
         <>
-          <Canvas flat camera={{ position: [13, 9, 13], fov: 55 }}>
+          <Canvas flat camera={{ position: CAMERA_HOME.position, fov: 55 }}>
             <SceneLighting />
-            <OrbitControls makeDefault target={[0, -1, 0]} />
+            <OrbitControls makeDefault target={CAMERA_HOME.target} />
             <CameraController nodes={layout.nodes} />
             <group
               position={[SCENE_CENTERING_OFFSET, SCENE_CENTERING_OFFSET, SCENE_CENTERING_OFFSET]}
             >
               <AxesLabels layout={layout} />
-              <RunNodes nodes={layout.nodes} encodings={encodings} />
+              <RunNodes layout={layout} encodings={encodings} />
             </group>
           </Canvas>
+          {takeaway && (
+            <p className="pointer-events-none absolute left-4 right-40 top-3 text-sm text-slate-200">
+              {takeaway}
+            </p>
+          )}
+          {hasFocus && (
+            <button
+              type="button"
+              onClick={resetView}
+              className="absolute right-3 top-3 rounded bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-700"
+            >
+              Xem toàn cảnh
+            </button>
+          )}
           <ColorLegend legend={encodings.legend} />
         </>
       )}

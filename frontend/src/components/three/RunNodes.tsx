@@ -1,19 +1,19 @@
 import type { RunEncodings } from '../../utils/color-utils'
-import type { RunNodeLayout } from '../../utils/coordinate-mapper'
+import type { SceneLayout } from '../../utils/coordinate-mapper'
 import { RunNode } from './RunNode'
 
 interface RunNodesProps {
-  nodes: RunNodeLayout[]
+  layout: SceneLayout
   encodings: RunEncodings
 }
 
-export function RunNodes({ nodes, encodings }: RunNodesProps) {
+export function RunNodes({ layout, encodings }: RunNodesProps) {
   return (
     <>
-      {nodes.map((node) => {
+      {layout.nodes.map((node) => {
         const encoding = encodings.byRunId.get(node.run.id)
         if (!encoding) return null
-        return <RunNode key={node.run.id} node={node} {...encoding} />
+        return <RunNode key={node.run.id} node={node} axisKeys={layout.axisKeys} {...encoding} />
       })}
     </>
   )

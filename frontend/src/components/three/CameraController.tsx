@@ -2,9 +2,14 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 import { useCameraStore } from '../../store/useCameraStore'
-import { SCENE_CENTERING_OFFSET, type RunNodeLayout } from '../../utils/coordinate-mapper'
+import {
+  CAMERA_HOME,
+  SCENE_CENTERING_OFFSET,
+  type RunNodeLayout,
+} from '../../utils/coordinate-mapper'
 
-const FOCUS_DISTANCE = 11
+const FOCUS_DISTANCE = 16
+const FOCUS_BLEND = 0.5
 const FLIGHT_SPEED = 3.5
 const ARRIVAL_THRESHOLD = 0.01
 
@@ -32,10 +37,17 @@ export function CameraController({ nodes }: { nodes: RunNodeLayout[] }) {
   useEffect(() => {
     if (!controls || requestId === handledRequest.current) return
     handledRequest.current = requestId
+    const home = new Vector3(...CAMERA_HOME.target)
+    if (targetRunId === null) {
+      flight.current = { lookAt: home, position: new Vector3(...CAMERA_HOME.position) }
+      return
+    }
     const node = nodes.find((candidate) => candidate.run.id === targetRunId)
     if (!node) return
 
-    const lookAt = new Vector3(...node.position).addScalar(SCENE_CENTERING_OFFSET)
+    // Aim between the scene center and the run, so the axes stay in view to read it against.
+    const nodeWorld = new Vector3(...node.position).addScalar(SCENE_CENTERING_OFFSET)
+    const lookAt = home.lerp(nodeWorld, FOCUS_BLEND)
     const direction = camera.position.clone().sub(controls.target).normalize()
     flight.current = {
       lookAt,

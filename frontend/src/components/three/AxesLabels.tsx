@@ -39,7 +39,7 @@ function AxisGuide({ axis, from, to, tickAt, titleAt }: AxisGuideProps) {
         </Label>
       ))}
       <Label position={titleAt} className="text-xs font-medium text-slate-200">
-        {axis.scale === 'linear' ? axis.key : `${axis.key} (${axis.scale})`}
+        {axis.scale === 'linear' ? axis.key : `${axis.key} (thang log)`}
       </Label>
     </>
   )

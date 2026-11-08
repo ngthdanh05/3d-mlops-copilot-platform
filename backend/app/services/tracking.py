@@ -74,9 +74,11 @@ async def find_best_runs(
     metric: RankingMetric,
     *,
     experiment_id: int | None = None,
-    top_k: int = 1,
+    top_k: int | None = 1,
 ) -> list[tuple[Run, float]]:
     """Completed runs ranked by their last-epoch `metric`, best first, with the value.
+
+    `top_k=None` returns every ranked run.
 
     Running and failed runs are skipped: their last epoch is not a final result.
     """
