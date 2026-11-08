@@ -568,7 +568,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Responsive: collapse sidebar on mobile
   - **DoD:** Layout hiển thị đúng 3 panels; resize browser không break layout
 
-- [ ] **P2-T04: 3D Scene Foundation**
+- [x] **P2-T04: 3D Scene Foundation**
   - Tạo `Scene.tsx` với R3F `<Canvas>`:
     - Camera: PerspectiveCamera, position `[15, 10, 15]`, fov 60
     - `<OrbitControls>` enabled (zoom, pan, rotate)
@@ -577,13 +577,13 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
     - `<axesHelper>` scale 10
   - **DoD:** 3D canvas renders; orbit controls functional; grid visible
 
-- [ ] **P2-T05: Axes Labels & Reference Grid**
+- [x] **P2-T05: Axes Labels & Reference Grid**
   - `<AxesLabels>`: Billboard text theo tên key của trục đang chọn (mặc định `learning_rate`, `batch_size`, `dropout`)
   - Tick marks + giá trị trên mỗi trục, đúng thang đang dùng (log hoặc tuyến tính)
   - Semi-transparent planes cho mặt XY, XZ (optional)
   - **DoD:** Labels đọc được từ mọi góc camera; không bị clip khi zoom
 
-- [ ] **P2-T06: Run Node Component**
+- [x] **P2-T06: Run Node Component**
   - `<RunNode>`: nhận prop `run: Run`
   - Render `<Sphere>` tại vị trí `(x, y, z)` từ `useNodePosition(run)`
   - Màu sắc: thang màu theo `final_val_accuracy` (fallback `final_accuracy`)
@@ -592,7 +592,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Material: `MeshStandardMaterial` + emissive khi selected
   - **DoD:** Single sphere renders đúng vị trí; màu theo metric, viền theo status
 
-- [ ] **P2-T07: Run Nodes Collection & Data Binding**
+- [x] **P2-T07: Run Nodes Collection & Data Binding**
   - `<RunNodes>`: fetch runs từ API → map thành `<RunNode>` components
   - Coordinate mapper: `coordinate-mapper.ts`
     - X = `normalize(log10(learning_rate)) * SCALE_X`
@@ -602,13 +602,13 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Handle empty state (no runs)
   - **DoD:** Tất cả runs từ API hiển thị đúng vị trí trong 3D; ≥ 20 nodes render mượt
 
-- [ ] **P2-T08: Node Interaction — Click & Hover**
+- [x] **P2-T08: Node Interaction — Click & Hover**
   - Raycasting: `onClick` trên `<RunNode>` → `useRunStore.selectRun(id)`
   - Hover: `onPointerOver` → change cursor, show tooltip (Billboard HTML)
   - Visual feedback: selected node → emissive glow (pulsing animation)
   - **DoD:** Click node → `selectedRunId` updates trong Zustand; hover → tooltip visible
 
-- [ ] **P2-T09: Inspector Panel**
+- [ ] **P2-T09: Inspector Panel** (đã có thông tin run, còn thiếu biểu đồ)
   - `<InspectorPanel>`: subscribe `useRunStore.selectedRunId`
   - Hiển thị:
     - Run name, status badge, created_at

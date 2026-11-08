@@ -132,7 +132,7 @@ created_at           status: running |        accuracy       (0–1)
 ## Thiết kế không gian 3D
 
 > [!NOTE]
-> Phần này là **thiết kế cho Phase 2**, chưa được cài đặt.
+> Trục mặc định, màu, kích thước và trạng thái **đã được cài đặt**. Việc chọn trục và instanced mesh chưa có.
 
 Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số liệu khó trả lời: *run tốt nằm ở vùng cấu hình nào?* và *vùng nào chưa được thử?* Vì vậy **vị trí thể hiện đầu vào (siêu tham số), còn hình thức thể hiện kết quả**.
 
@@ -141,7 +141,7 @@ Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số 
 | Trục X | `learning_rate` | **Thang log** (giá trị thường trải từ 1e-5 đến 1e-1) |
 | Trục Y | `batch_size` | Thang log cơ số 2 |
 | Trục Z | Siêu tham số dạng số còn lại: ưu tiên `dropout`, rồi `epochs`, rồi các key khác | Lấy key đầu tiên có ≥ 2 giá trị khác nhau. Không có key nào thì Z phẳng |
-| Màu | `final_val_accuracy` (hoặc `final_accuracy` nếu không có) | Thang màu liên tục, có chú giải |
+| Màu | `final_val_accuracy` (hoặc `final_accuracy` nếu không có) | Thang màu liên tục, có chú giải. Miền giá trị lấy từ các run hoàn thành và bỏ giá trị ngoại lai ở phía thấp, để một run phân kỳ không làm các run còn lại cùng màu |
 | Kích thước | `final_val_loss` | Loss cao → cầu nhỏ |
 | Viền / icon | Trạng thái | ● hoàn thành · ◐ đang chạy · ✕ lỗi |
 
