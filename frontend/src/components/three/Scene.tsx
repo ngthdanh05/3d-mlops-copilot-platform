@@ -3,8 +3,9 @@ import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
 import { useRunStore } from '../../store/useRunStore'
 import { encodeRuns } from '../../utils/color-utils'
-import { layoutRuns, SCENE_SIZE } from '../../utils/coordinate-mapper'
+import { layoutRuns, SCENE_CENTERING_OFFSET } from '../../utils/coordinate-mapper'
 import { AxesLabels } from './AxesLabels'
+import { CameraController } from './CameraController'
 import { ColorLegend } from './ColorLegend'
 import { RunNodes } from './RunNodes'
 import { SceneLighting } from './SceneLighting'
@@ -13,8 +14,6 @@ interface SceneProps {
   isLoading: boolean
   hasError: boolean
 }
-
-const CENTERING_OFFSET = -SCENE_SIZE / 2
 
 export function Scene({ isLoading, hasError }: SceneProps) {
   const runs = useRunStore((state) => state.runs)
@@ -41,7 +40,10 @@ export function Scene({ isLoading, hasError }: SceneProps) {
           <Canvas flat camera={{ position: [13, 9, 13], fov: 55 }}>
             <SceneLighting />
             <OrbitControls makeDefault target={[0, -1, 0]} />
-            <group position={[CENTERING_OFFSET, CENTERING_OFFSET, CENTERING_OFFSET]}>
+            <CameraController nodes={layout.nodes} />
+            <group
+              position={[SCENE_CENTERING_OFFSET, SCENE_CENTERING_OFFSET, SCENE_CENTERING_OFFSET]}
+            >
               <AxesLabels layout={layout} />
               <RunNodes nodes={layout.nodes} encodings={encodings} />
             </group>

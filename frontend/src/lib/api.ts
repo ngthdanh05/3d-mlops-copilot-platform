@@ -1,4 +1,4 @@
-import type { Experiment, RunDetail, RunSummary } from './types'
+import type { CopilotResponse, Experiment, RunDetail, RunSummary } from './types'
 
 export class ApiError extends Error {
   readonly status: number
@@ -27,4 +27,19 @@ export function fetchRuns(experimentId: number): Promise<RunSummary[]> {
 
 export function fetchRunDetail(runId: number): Promise<RunDetail> {
   return getJson(`/api/runs/${runId}`)
+}
+
+export async function postCopilotChat(
+  message: string,
+  experimentId: number | null,
+): Promise<CopilotResponse> {
+  const response = await fetch('/api/copilot/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, experiment_id: experimentId }),
+  })
+  if (!response.ok) {
+    throw new ApiError(response.status, `POST /api/copilot/chat failed with ${response.status}`)
+  }
+  return response.json() as Promise<CopilotResponse>
 }

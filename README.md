@@ -156,7 +156,7 @@ Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số 
 ## Thiết kế trợ lý AI
 
 > [!NOTE]
-> Phần này là **thiết kế cho Phase 3**, chưa được cài đặt.
+> Đã có vòng lặp tool calling, `find_best_runs`, 3 tool điều khiển giao diện và khung chat. Các tool truy vấn còn lại và kết nối LLM thật chưa có: hiện backend dùng **LLM giả lập**, câu trả lời có tiền tố `[LLM giả lập]` và chỉ hiểu câu hỏi tìm run tốt nhất.
 
 Trợ lý dùng **tool calling (function calling)**: LLM **không** được nhận toàn bộ dữ liệu trong prompt và **không** tự đưa ra số liệu. Mọi con số phải lấy qua công cụ. Cách này tránh việc AI bịa số và vẫn chạy được khi có hàng trăm run.
 
@@ -190,7 +190,7 @@ Ví dụ phản hồi của `/api/copilot/chat`:
 }
 ```
 
-Nhà cung cấp LLM: **LLM_PROVIDER_TBD** *(cần chốt trước Phase 3: Gemini hoặc OpenAI)*.
+Nhà cung cấp LLM: **LLM_PROVIDER_TBD** *(cần chốt: Gemini hoặc OpenAI)*. Khi chốt, chỉ cần thêm client trong `backend/app/services/copilot/llm_client.py` và trả về nó ở `get_llm_client`.
 
 ---
 
@@ -345,7 +345,7 @@ Tất cả endpoint có tiền tố `/api`. Tài liệu đầy đủ, có thể 
 | `GET` | `/api/runs/{id}` | Chi tiết run kèm toàn bộ metrics theo epoch | 200 · 404 |
 | `PUT` | `/api/runs/{id}` | Cập nhật trạng thái: `completed` / `failed` / `running` | 200 · 404 · 409 |
 | `POST` | `/api/runs/{id}/metrics` | Ghi metrics cho 1 epoch | 201 · 404 · 409 epoch đã ghi |
-| `POST` | `/api/copilot/chat` | *(Phase 3)* Hỏi trợ lý AI, trả về `message` + `actions` | — |
+| `POST` | `/api/copilot/chat` | Hỏi trợ lý AI (hiện dùng LLM giả lập), trả về `message` + `actions` | 200 · 422 |
 
 Dữ liệu gửi lên sai định dạng luôn trả về **422**, kèm thông báo chỉ rõ field nào sai.
 
