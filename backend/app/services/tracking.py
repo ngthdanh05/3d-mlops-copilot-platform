@@ -12,7 +12,7 @@ from app.models import Experiment, Metric, Run, RunStatus
 from app.schemas import ExperimentCreate, MetricCreate, RankingMetric, RunCreate, RunUpdate
 from app.services.errors import ConflictError, NotFoundError
 
-_LOWER_IS_BETTER = {"loss", "val_loss"}
+LOWER_IS_BETTER = {"loss", "val_loss"}
 
 # ── Experiments ───────────────────────────────────────────────────────────────
 
@@ -69,10 +69,23 @@ async def list_runs(db: AsyncSession, experiment_id: int | None = None) -> Seque
 
 async def get_run(db: AsyncSession, run_id: int, *, with_metrics: bool = False) -> Run:
     options = [selectinload(Run.metrics)] if with_metrics else []
-    run = await db.get(Run, run_id, options=options)
+    # Without populate_existing, a run already in the session comes back without its metrics.
+    run = await db.get(Run, run_id, options=options, populate_existing=with_metrics)
     if run is None:
         raise NotFoundError(f"Run {run_id} not found")
     return run
+
+
+async def find_runs_by_name(
+    db: AsyncSession, names: Sequence[str], *, experiment_id: int | None = None
+) -> list[Run]:
+    """Runs whose name matches, ignoring case. Names are only unique within an experiment."""
+    stmt = select(Run).order_by(Run.id)
+    if experiment_id is not None:
+        await get_experiment(db, experiment_id)
+        stmt = stmt.where(Run.experiment_id == experiment_id)
+    wanted = {name.casefold() for name in names}
+    return [run for run in await db.scalars(stmt) if run.run_name.casefold() in wanted]
 
 
 async def find_best_runs(
@@ -95,7 +108,7 @@ async def find_best_runs(
         value = getattr(max(run.metrics, key=lambda m: m.epoch), metric)
         if value is not None:
             ranked.append((run, value))
-    ranked.sort(key=lambda pair: pair[1], reverse=metric not in _LOWER_IS_BETTER)
+    ranked.sort(key=lambda pair: pair[1], reverse=metric not in LOWER_IS_BETTER)
     return ranked[:top_k]
 
 
