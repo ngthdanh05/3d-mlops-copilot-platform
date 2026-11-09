@@ -209,6 +209,74 @@ async def test_finished_at_can_be_corrected_on_finished_run(client):
     assert resp.json()["finished_at"] == "2026-11-06T12:00:00Z"
 
 
+# ── Delete ────────────────────────────────────────────────────────────────────
+
+
+async def _metric_run_ids(session) -> list[int]:
+    from sqlalchemy import select
+
+    from app.models import Metric
+
+    return sorted(await session.scalars(select(Metric.run_id)))
+
+
+async def test_delete_run_cascades_to_its_metrics_only(client, session):
+    exp = await _experiment(client)
+    doomed = await _run(client, exp["id"], "doomed")
+    kept = await _run(client, exp["id"], "kept")
+    await _metric(client, doomed["id"], 1)
+    await _metric(client, kept["id"], 1)
+
+    resp = await client.delete(f"/api/runs/{doomed['id']}")
+    assert resp.status_code == 204
+    assert resp.content == b""
+
+    assert (await client.get(f"/api/runs/{doomed['id']}")).status_code == 404
+    assert (await client.get(f"/api/runs/{kept['id']}")).status_code == 200
+    assert await _metric_run_ids(session) == [kept["id"]]
+
+
+async def test_delete_experiment_cascades_to_runs_and_metrics(client, session):
+    doomed = await _experiment(client, "doomed")
+    kept = await _experiment(client, "kept")
+    doomed_run = await _run(client, doomed["id"])
+    kept_run = await _run(client, kept["id"])
+    await _metric(client, doomed_run["id"], 1)
+    await _metric(client, kept_run["id"], 1)
+
+    resp = await client.delete(f"/api/experiments/{doomed['id']}")
+    assert resp.status_code == 204
+    assert resp.content == b""
+
+    assert (await client.get(f"/api/experiments/{doomed['id']}")).status_code == 404
+    assert (await client.get(f"/api/runs/{doomed_run['id']}")).status_code == 404
+    assert [r["id"] for r in (await client.get("/api/runs")).json()] == [kept_run["id"]]
+    assert await _metric_run_ids(session) == [kept_run["id"]]
+
+
+async def test_deleted_name_can_be_reused(client):
+    exp = await _experiment(client)
+    run = await _run(client, exp["id"])
+    await client.delete(f"/api/runs/{run['id']}")
+    await _run(client, exp["id"])
+
+    await client.delete(f"/api/experiments/{exp['id']}")
+    await _experiment(client)
+
+
+@pytest.mark.parametrize("path", ["/api/experiments", "/api/runs"])
+async def test_delete_errors(client, path):
+    assert (await client.delete(f"{path}/999")).status_code == 404
+    assert (await client.delete(f"{path}/abc")).status_code == 422
+
+
+async def test_delete_twice_is_404(client):
+    exp = await _experiment(client)
+    url = f"/api/experiments/{exp['id']}"
+    assert (await client.delete(url)).status_code == 204
+    assert (await client.delete(url)).status_code == 404
+
+
 # ── Validation (422) ──────────────────────────────────────────────────────────
 
 
