@@ -157,7 +157,7 @@ Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số 
 ## Thiết kế trợ lý AI
 
 > [!NOTE]
-> Đã có vòng lặp tool calling, kết nối Gemini, `find_best_runs`, 3 tool điều khiển giao diện và khung chat. Các tool truy vấn còn lại chưa có. Khi chưa đặt `LLM_API_KEY`, backend dùng **LLM giả lập**: câu trả lời có tiền tố `[LLM giả lập]` và chỉ hiểu câu hỏi tìm run tốt nhất.
+> Đã có vòng lặp tool calling, kết nối Gemini, 6 tool truy vấn, 3 tool điều khiển giao diện và khung chat. Khi chưa đặt `LLM_API_KEY`, backend dùng **LLM giả lập**: câu trả lời có tiền tố `[LLM giả lập]` và chỉ hiểu câu hỏi tìm run tốt nhất.
 
 Trợ lý dùng **tool calling (function calling)**: LLM **không** được nhận toàn bộ dữ liệu trong prompt và **không** tự đưa ra số liệu. Mọi con số phải lấy qua công cụ. Cách này tránh việc AI bịa số và vẫn chạy được khi có hàng trăm run.
 
@@ -167,6 +167,7 @@ Trợ lý dùng **tool calling (function calling)**: LLM **không** được nh�
 |---|---|
 | `list_experiments()` | Danh sách experiment |
 | `find_best_runs(experiment_id, metric, top_k)` | Các run tốt nhất theo một metric |
+| `find_runs_by_name(run_names, experiment_id)` | Tìm `run_id` từ tên run người dùng nhắc tới, không phân biệt hoa thường |
 | `get_run(run_id)` | Siêu tham số + metrics từng epoch của một run |
 | `compare_runs(run_ids)` | So sánh siêu tham số và metrics cuối |
 | `detect_overfitting(run_id)` | Phân tích khoảng cách train/val qua các epoch (tính bằng code, không do LLM tự đoán) |
