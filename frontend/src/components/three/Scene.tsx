@@ -11,6 +11,7 @@ import {
 } from '../../utils/coordinate-mapper'
 import { summarizeBestRuns } from '../../utils/insights'
 import { AxesLabels } from './AxesLabels'
+import { AxisSelector } from './AxisSelector'
 import { CameraController } from './CameraController'
 import { ColorLegend } from './ColorLegend'
 import { RunNodes } from './RunNodes'
@@ -30,12 +31,13 @@ function resetView() {
 
 export function Scene({ isLoading, hasError }: SceneProps) {
   const runs = useRunStore((state) => state.runs)
+  const axisSelection = useRunStore((state) => state.axisSelection)
   const hasExperiment = useRunStore((state) => state.selectedExperimentId !== null)
   const hasFocus = useRunStore(
     (state) => state.selectedRunId !== null || state.highlightedRunIds.length > 0,
   )
 
-  const layout = useMemo(() => layoutRuns(runs), [runs])
+  const layout = useMemo(() => layoutRuns(runs, axisSelection), [runs, axisSelection])
   const encodings = useMemo(() => encodeRuns(runs), [runs])
   const takeaway = useMemo(() => summarizeBestRuns(runs, layout.axisKeys), [runs, layout])
 
@@ -79,6 +81,7 @@ export function Scene({ isLoading, hasError }: SceneProps) {
               Xem toàn cảnh
             </button>
           )}
+          <AxisSelector layout={layout} />
           <ColorLegend legend={encodings.legend} />
         </>
       )}

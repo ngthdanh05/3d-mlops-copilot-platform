@@ -37,6 +37,12 @@ async def get_experiment(db: AsyncSession, experiment_id: int) -> Experiment:
     return experiment
 
 
+async def delete_experiment(db: AsyncSession, experiment_id: int) -> None:
+    """Delete an experiment; the database cascades to its runs and their metrics."""
+    await db.delete(await get_experiment(db, experiment_id))
+    await db.commit()
+
+
 # ── Runs ──────────────────────────────────────────────────────────────────────
 
 
@@ -110,6 +116,12 @@ async def update_run(db: AsyncSession, run_id: int, data: RunUpdate) -> Run:
     await db.commit()
     await db.refresh(run)
     return run
+
+
+async def delete_run(db: AsyncSession, run_id: int) -> None:
+    """Delete a run; the database cascades to its metrics."""
+    await db.delete(await get_run(db, run_id))
+    await db.commit()
 
 
 # ── Metrics ───────────────────────────────────────────────────────────────────

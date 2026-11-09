@@ -52,3 +52,13 @@ async def get_run(run_id: int, db: DbSession):
 )
 async def update_run(run_id: int, data: RunUpdate, db: DbSession):
     return await tracking.update_run(db, run_id, data)
+
+
+@router.delete(
+    "/{run_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(404),
+    summary="Delete a run with its metrics",
+)
+async def delete_run(run_id: int, db: DbSession) -> None:
+    await tracking.delete_run(db, run_id)

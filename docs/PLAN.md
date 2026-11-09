@@ -9,7 +9,47 @@
 
 ---
 
+## Tiến độ hiện tại
+
+Cập nhật 2026-11-09, đối chiếu với code. ✅ là đã xong, 🚧 là làm một phần, ô trống là chưa làm.
+
+| Phase | ✅ Xong | 🚧 Một phần | Chưa làm |
+| --- | --- | --- | --- |
+| 1. Backend & MLOps | 7 | 0 | 0 |
+| 2. Không gian 3D | 11 | 1 | 0 |
+| 3. AI Copilot | 4 | 4 | 0 |
+| 4. Đồng bộ & hoàn thiện | 0 | 5 | 2 |
+| 5. Kiểm thử & demo | 0 | 2 | 3 |
+| **Tổng (39 task)** | **22** | **12** | **5** |
+
+Việc còn lại, xếp theo thứ tự nên làm:
+
+| # | Task | Trạng thái | Còn thiếu |
+| --- | --- | --- | --- |
+| 1 | P3-T02 Query Tools | 🚧 | `list_experiments`, `get_run`, `compare_runs`, `detect_overfitting` |
+| 2 | P3-T05 Copilot Endpoint | 🚧 | Trả lời câu hỏi so sánh và chẩn đoán, sau khi có tool |
+| 3 | Thang màu (phát sinh) | Chưa làm | Các run tốt khó phân biệt khi có nhiều run xấu, thấy rõ ở `real-mnist-mlp` |
+| 4 | P2-T09 Inspector Panel | 🚧 | Biểu đồ accuracy/loss theo epoch |
+| 5 | P3-T08 Copilot Tests | 🚧 | Bộ câu hỏi kiểm tra độ chính xác |
+| 6 | P4-T02 Sidebar | 🚧 | Danh sách run, tìm kiếm |
+| 7 | P4-T01 State Sync | 🚧 | Gợi ý câu hỏi khi click, bộ lọc |
+| 8 | P3-T06 Chat Panel | 🚧 | Render Markdown |
+| 9 | P4-T06 Error & Loading | 🚧 | Nút thử lại, skeleton |
+| 10 | P4-T04 Hiệu năng 3D | Chưa làm | Instanced mesh, đo 200 node |
+| 11 | P4-T05 Chat UX | Chưa làm | Streaming, câu hỏi gợi ý, lưu lịch sử |
+| 12 | P4-T03 Node Visual | 🚧 | Hiệu ứng xuất hiện |
+| 13 | P4-T07 Responsive | 🚧 | Thu gọn panel, toàn màn hình |
+| 14 | P5-T03 Frontend Tests | Chưa làm | Cài Vitest, test logic toạ độ và store |
+| 15 | P5-T02 API Tests | 🚧 | Ca database trống, 100+ run |
+| 16 | P5-T01 Smoke Test | Chưa làm | Script tự động, ảnh chụp |
+| 17 | P5-T04 Benchmark | Chưa làm | Đo và ghi `docs/performance.md` |
+| 18 | P5-T05 Demo & tài liệu | 🚧 | Kịch bản demo, ảnh chụp |
+
+---
+
 ## Mục lục
+
+- [Tiến độ hiện tại](#tiến-độ-hiện-tại)
 
 1. [Project Overview & Architecture](#1-project-overview--architecture)
 2. [Core Features Scope (MVP Phase)](#2-core-features-scope-mvp-phase)
@@ -487,24 +527,24 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [x] **P1-T01: Khởi tạo Backend Project**
+- [x] ✅ **P1-T01: Khởi tạo Backend Project**
   - Tạo `backend/` directory, `pyproject.toml` với dependencies
   - Setup FastAPI app skeleton (`main.py`, `config.py`)
   - Cấu hình CORS middleware cho `localhost:5173` (Vite dev server) / `localhost:3000`
   - **DoD:** `uvicorn app.main:app --reload` khởi chạy, `/docs` (Swagger) accessible
 
-- [x] **P1-T02: Database Models & Setup**
+- [x] ✅ **P1-T02: Database Models & Setup**
   - Định nghĩa SQLAlchemy models: `Experiment`, `Run`, `Metric`
   - Tạo `database.py` với async SQLite engine
   - Auto-create tables on startup (`metadata.create_all`)
   - **DoD:** Database file `mlops.db` được tạo; tables verify qua `sqlite3` CLI
 
-- [x] **P1-T03: Pydantic Schemas**
+- [x] ✅ **P1-T03: Pydantic Schemas**
   - Tạo request/response schemas cho Experiment, Run, Metric
   - Validation rules: `learning_rate > 0`, `0 ≤ accuracy ≤ 1`, `epochs ≥ 1`
   - **DoD:** Schemas importable, JSON serialization/deserialization hoạt động
 
-- [x] **P1-T04: CRUD API Endpoints**
+- [x] ✅ **P1-T04: CRUD API Endpoints**
   - `POST /api/experiments` — Tạo experiment
   - `GET /api/experiments` — List experiments
   - `POST /api/runs` — Tạo run (với hyperparams JSON)
@@ -514,7 +554,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - `POST /api/runs/{id}/metrics` — Log metrics cho 1 epoch
   - **DoD:** Tất cả endpoints test thành công qua Swagger UI; HTTP status codes đúng
 
-- [x] **P1-T05: Demo Training Script**
+- [x] ✅ **P1-T05: Demo Training Script**
   - Viết `scripts/train_mnist_demo.py`:
     - Train sklearn `MLPClassifier` hoặc PyTorch CNN trên MNIST (subset nhỏ)
     - Mỗi epoch: call `POST /api/runs/{id}/metrics` với accuracy, loss, val_loss
@@ -522,12 +562,12 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Chạy 5-10 lần với hyperparams khác nhau (vary `lr`, `batch_size`, `epochs`)
   - **DoD:** Database có ≥ 5 runs, mỗi run có ≥ 5 epochs metrics; `GET /api/runs` trả về đúng data
 
-- [x] **P1-T06: Seed Data Utility**
+- [x] ✅ **P1-T06: Seed Data Utility**
   - Viết `utils/seed_data.py`: tạo synthetic runs (không cần train thật) cho dev nhanh
   - Generate 20-50 runs với realistic-looking metrics curves
   - **DoD:** Chạy seed script → DB populated; frontend dev có thể dùng ngay
 
-- [x] **P1-T07: Unit Tests cho Tracking API**
+- [x] ✅ **P1-T07: Unit Tests cho Tracking API**
   - Test CRUD operations với in-memory SQLite
   - Test validation (invalid hyperparams, missing fields)
   - **DoD:** `pytest tests/test_tracking_api.py` — all green, ≥ 80% coverage cho routers
@@ -540,19 +580,19 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [x] **P2-T01: Khởi tạo Frontend Project**
+- [x] ✅ **P2-T01: Khởi tạo Frontend Project**
   - `pnpm create vite frontend --template react-ts` (Vite + React SPA, TypeScript)
   - Install: `three`, `@react-three/fiber`, `@react-three/drei`, `zustand`, `swr`
   - Setup Tailwind CSS: `tailwind.config.js`, `postcss.config.js`, `src/index.css`
   - Cấu hình API reverse proxy trong `vite.config.ts` (`/api` -> `http://localhost:8000`)
   - **DoD:** `pnpm dev` → Vite dev server chạy tại `localhost:5173`; khởi động tức thì, blank page renders
 
-- [x] **P2-T02: TypeScript Types & API Client**
+- [x] ✅ **P2-T02: TypeScript Types & API Client**
   - Định nghĩa `types.ts`: `Run`, `Metric`, `Experiment`, `ChatMessage`, `CopilotResponse`
   - Tạo `lib/api.ts`: base URL config, `fetchRuns()`, `fetchRunDetail(id)`
   - **DoD:** `useRuns()` hook trả về data từ backend (proxy qua `vite.config.ts` server.proxy)
 
-- [x] **P2-T03: Layout Workspace (3-Panel)**
+- [x] ✅ **P2-T03: Layout Workspace (3-Panel)**
   - Tạo `Workspace.tsx`: CSS Grid / Flexbox layout
     ```
     ┌──────────┬────────────────────────┬──────────────┐
@@ -568,7 +608,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Responsive: collapse sidebar on mobile
   - **DoD:** Layout hiển thị đúng 3 panels; resize browser không break layout
 
-- [x] **P2-T04: 3D Scene Foundation**
+- [x] ✅ **P2-T04: 3D Scene Foundation**
   - Tạo `Scene.tsx` với R3F `<Canvas>`:
     - Camera: PerspectiveCamera, position `[15, 10, 15]`, fov 60
     - `<OrbitControls>` enabled (zoom, pan, rotate)
@@ -577,13 +617,13 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
     - `<axesHelper>` scale 10
   - **DoD:** 3D canvas renders; orbit controls functional; grid visible
 
-- [x] **P2-T05: Axes Labels & Reference Grid**
+- [x] ✅ **P2-T05: Axes Labels & Reference Grid**
   - `<AxesLabels>`: Billboard text theo tên key của trục đang chọn (mặc định `learning_rate`, `batch_size`, `dropout`)
   - Tick marks + giá trị trên mỗi trục, đúng thang đang dùng (log hoặc tuyến tính)
   - Semi-transparent planes cho mặt XY, XZ (optional)
   - **DoD:** Labels đọc được từ mọi góc camera; không bị clip khi zoom
 
-- [x] **P2-T06: Run Node Component**
+- [x] ✅ **P2-T06: Run Node Component**
   - `<RunNode>`: nhận prop `run: Run`
   - Render `<Sphere>` tại vị trí `(x, y, z)` từ `useNodePosition(run)`
   - Màu sắc: thang màu theo `final_val_accuracy` (fallback `final_accuracy`)
@@ -592,7 +632,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Material: `MeshStandardMaterial` + emissive khi selected
   - **DoD:** Single sphere renders đúng vị trí; màu theo metric, viền theo status
 
-- [x] **P2-T07: Run Nodes Collection & Data Binding**
+- [x] ✅ **P2-T07: Run Nodes Collection & Data Binding**
   - `<RunNodes>`: fetch runs từ API → map thành `<RunNode>` components
   - Coordinate mapper: `coordinate-mapper.ts`
     - X = `normalize(log10(learning_rate)) * SCALE_X`
@@ -602,13 +642,13 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Handle empty state (no runs)
   - **DoD:** Tất cả runs từ API hiển thị đúng vị trí trong 3D; ≥ 20 nodes render mượt
 
-- [x] **P2-T08: Node Interaction — Click & Hover**
+- [x] ✅ **P2-T08: Node Interaction — Click & Hover**
   - Raycasting: `onClick` trên `<RunNode>` → `useRunStore.selectRun(id)`
   - Hover: `onPointerOver` → change cursor, show tooltip (Billboard HTML)
   - Visual feedback: selected node → emissive glow (pulsing animation)
   - **DoD:** Click node → `selectedRunId` updates trong Zustand; hover → tooltip visible
 
-- [ ] **P2-T09: Inspector Panel** (đã có thông tin run, còn thiếu biểu đồ)
+- [ ] 🚧 **P2-T09: Inspector Panel** (đã có thông tin run; còn biểu đồ accuracy/loss theo epoch)
   - `<InspectorPanel>`: subscribe `useRunStore.selectedRunId`
   - Hiển thị:
     - Run name, status badge, created_at
@@ -618,19 +658,19 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Empty state khi chưa select run
   - **DoD:** Click node → panel hiển thị đúng data; chart renders epoch timeline
 
-- [x] **P2-T10: Camera Fly-to Animation**
+- [x] ✅ **P2-T10: Camera Fly-to Animation**
   - `<CameraController>`: subscribe `useCameraStore.cameraTarget`
   - Khi target thay đổi: animate camera position → offset từ node position
   - Sử dụng `@react-spring/three` hoặc manual lerp trong `useFrame`
   - Giữ camera nhìn vào node (lookAt target)
   - **DoD:** Select node → camera smooth transition tới node; không jump
 
-- [ ] **P2-T11: Chọn trục 3D**
+- [x] ✅ **P2-T11: Chọn trục 3D**
   - Dropdown cho X, Y, Z, liệt kê key dạng số trong `hyperparams` và các metric cuối
   - Đổi trục → node di chuyển, label và tick cập nhật
   - **DoD:** Đổi trục → mọi node về đúng vị trí mới; key không phải số không xuất hiện trong danh sách
 
-- [ ] **P2-T12: Endpoint xoá (Should)**
+- [x] ✅ **P2-T12: Endpoint xoá (Should)**
   - `DELETE /api/experiments/{id}` và `DELETE /api/runs/{id}`, tận dụng cascade đã có ở tầng database
   - **DoD:** Xoá xong trả 204; id không tồn tại trả 404; có test
 
@@ -642,29 +682,29 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [ ] **P3-T01: LLM Client Setup** (đã có client Gemini và bản giả lập, chưa chạy thử với key thật)
+- [x] ✅ **P3-T01: LLM Client Setup**
   - Chốt nhà cung cấp, cài SDK tương ứng
   - Tạo `config.py`: load API key từ `.env` (`LLM_API_KEY`, `LLM_MODEL`)
   - Tạo `llm_client.py`: một interface hỗ trợ tool calling, kèm bản giả (fake) để test không tốn API
   - **DoD:** Gọi LLM với một tool mẫu → nhận được tool call đúng tên và tham số
 
-- [ ] **P3-T02: Query Tools** (mới có `find_best_runs`)
+- [ ] 🚧 **P3-T02: Query Tools** (mới có `find_best_runs`; còn `list_experiments`, `get_run`, `compare_runs`, `detect_overfitting`)
   - `query_tools.py`: `list_experiments`, `find_best_runs`, `get_run`, `compare_runs`, `detect_overfitting`
   - Tool gọi service layer, không truy vấn database trực tiếp
   - `detect_overfitting`: tính khoảng cách train/val qua các epoch bằng code
   - **DoD:** Mỗi tool có unit test với dữ liệu seed; run không tồn tại trả lỗi rõ ràng cho LLM
 
-- [x] **P3-T03: UI Action Tools**
+- [x] ✅ **P3-T03: UI Action Tools**
   - `ui_tools.py`: `highlight_runs`, `focus_camera`, `open_inspector`
   - Tool chỉ ghi nhận action, không chạm database ngoài việc kiểm tra `run_id` tồn tại
   - **DoD:** `run_id` không tồn tại bị loại khỏi `actions`; có unit test
 
-- [x] **P3-T04: System Prompt & Schemas**
+- [x] ✅ **P3-T04: System Prompt & Schemas**
   - `prompts.py`: vai trò của trợ lý, yêu cầu mọi con số phải lấy từ tool, ngôn ngữ trả lời
   - `schemas/copilot.py`: `ChatRequest`, `ChatResponse`, các kiểu `Action`
   - **DoD:** Schema khớp ví dụ ở mục 2.3; OpenAPI hiển thị đúng
 
-- [ ] **P3-T05: Copilot API Endpoint** (endpoint đã chạy, chờ đủ tool)
+- [ ] 🚧 **P3-T05: Copilot API Endpoint** (đã chạy với Gemini cho câu hỏi run tốt nhất; còn so sánh và chẩn đoán)
   - `POST /api/copilot/chat`:
     - Request: `{ "message": str, "experiment_id": int (optional) }`
     - Flow: gửi câu hỏi + danh sách tool → chạy tool call → lặp đến khi LLM trả lời (có giới hạn số vòng) → gom actions
@@ -672,14 +712,14 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Error handling: LLM timeout hoặc lỗi → thông báo thân thiện, không trả 500 thô
   - **DoD:** 3 loại câu hỏi (best run, compare, diagnose) trả lời đúng số liệu trong database
 
-- [ ] **P3-T06: Chat Panel UI** (đã chat được, chưa render Markdown)
+- [ ] 🚧 **P3-T06: Chat Panel UI** (đã chat được; còn render Markdown)
   - `<ChatPanel>`: message list + input
   - `<ChatMessage>`: render Markdown (react-markdown), differentiate user/AI bubbles
   - `<ChatInput>`: text input + send button + loading indicator
   - `useChatStore`: `messages[]`, `isLoading`, `sendMessage()`
   - **DoD:** Type message → send → loading spinner → AI response rendered
 
-- [x] **P3-T07: Action Handler (Frontend)**
+- [x] ✅ **P3-T07: Action Handler (Frontend)**
   - `applyActions` trong `hooks/useCopilot.ts`: khi AI response có actions:
     - `highlight_runs`: dispatch `useRunStore.highlightRuns(run_ids)`
     - `focus_camera`: dispatch `useCameraStore.setTarget(run_id)`
@@ -687,7 +727,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - RunNode listens: nếu highlighted → add orange emissive ring
   - **DoD:** AI says "best run is run-003" → node run-003 glows + camera flies to it
 
-- [ ] **P3-T08: Copilot Engine Tests** (đã có test engine, còn bộ câu hỏi kiểm tra)
+- [ ] 🚧 **P3-T08: Copilot Engine Tests** (đã có test engine và tool; còn bộ câu hỏi kiểm tra độ chính xác)
   - Unit tests cho query tools, UI tools và vòng lặp engine
   - Integration test: fake LLM trả tool call → kiểm tra toàn bộ pipeline
   - Bộ câu hỏi kiểm tra độ chính xác của AI: đối chiếu số trong câu trả lời với database
@@ -701,21 +741,21 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [ ] **P4-T01: Cross-Panel State Sync**
+- [ ] 🚧 **P4-T01: Cross-Panel State Sync** (đã có AI → highlight, camera, Inspector; còn gợi ý câu hỏi khi click và bộ lọc)
   - Kịch bản 1: Click node → Inspector cập nhật + Chat suggest question
   - Kịch bản 2: AI response → Node highlight + Camera focus + Inspector update
   - Kịch bản 3: Sidebar filter → 3D nodes filtered + reset selection
   - Implement via Zustand subscriptions (không prop drilling)
   - **DoD:** Tất cả 3 kịch bản hoạt động; state consistency verified
 
-- [ ] **P4-T02: Sidebar — Experiment & Run List**
+- [ ] 🚧 **P4-T02: Sidebar — Experiment & Run List** (đã có danh sách experiment; còn danh sách run và tìm kiếm)
   - Experiment dropdown / tabs
   - Run list: name, status badge, final accuracy
   - Click run in sidebar → same effect as click node (select + focus)
   - Search/filter by run name
   - **DoD:** Sidebar interactive; select run from list → node highlighted in 3D
 
-- [ ] **P4-T03: Node Visual Enhancements**
+- [ ] 🚧 **P4-T03: Node Visual Enhancements** (đã có trạng thái chọn và highlight; còn hiệu ứng xuất hiện)
   - Connecting lines giữa các nodes cùng experiment (optional)
   - Particle effect / glow shader cho selected node
   - Smooth appear animation khi data loads (scale from 0 → 1)
@@ -736,14 +776,14 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Chat history persistence (localStorage)
   - **DoD:** Quick actions work; streaming visible; history survives page refresh
 
-- [ ] **P4-T06: Error Handling & Loading States**
+- [ ] 🚧 **P4-T06: Error Handling & Loading States** (đã báo lỗi backend và LLM; còn nút thử lại và skeleton)
   - Backend down → friendly error message + retry button
   - LLM API error → fallback message trong chat
   - Loading skeletons cho panels
   - 3D canvas loading → progress indicator
   - **DoD:** Disconnect backend → UI shows error gracefully; no console errors
 
-- [ ] **P4-T07: Responsive Design & Dark Theme**
+- [ ] 🚧 **P4-T07: Responsive Design & Dark Theme** (đã có giao diện tối và layout xếp dọc; còn thu gọn panel và toàn màn hình)
   - Dark mode (mặc định cho 3D workspace aesthetic)
   - Panels collapsible trên mobile
   - 3D canvas full-screen toggle
@@ -767,7 +807,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
     6. Manual: chat "run nào tốt nhất?" → AI responds + node highlights
   - **DoD:** Full flow passes without errors; documented with screenshots
 
-- [ ] **P5-T02: API Integration Tests**
+- [ ] 🚧 **P5-T02: API Integration Tests** (đã phủ mọi endpoint; còn ca database trống và 100+ run)
   - Test full CRUD cycle: create experiment → create run → log metrics → query
   - Test copilot endpoint with various intents
   - Test edge cases: empty DB, 100+ runs, malformed requests
@@ -786,7 +826,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Document results in `docs/performance.md`
   - **DoD:** 200 nodes @ 60fps; API p95 < 200ms; AI e2e < 8s
 
-- [ ] **P5-T05: Demo Script & Documentation**
+- [ ] 🚧 **P5-T05: Demo Script & Documentation** (đã có hướng dẫn cài đặt; còn kịch bản demo và ảnh chụp)
   - Viết `README.md`: setup instructions, prerequisites, run commands
   - Tạo demo script / walkthrough cho stakeholders
   - Screenshots / screen recording of key flows
@@ -834,6 +874,6 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 ---
 
-> **Next Step:** Phase 1 đã xong. Bắt đầu Phase 2 — 3D Scene & Canvas Development.
+> **Next Step:** Xem bảng việc còn lại ở mục Tiến độ hiện tại.
 >
 > Ước tính tổng thời gian: **11–16 ngày** (1 developer) hoặc **7–10 ngày** (2 developers parallel).

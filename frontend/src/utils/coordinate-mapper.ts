@@ -12,6 +12,16 @@ export const CAMERA_HOME = {
 export const UNKNOWN_POSITION = -1.5
 
 export type AxisScale = 'log10' | 'log2' | 'linear'
+export type AxisName = 'x' | 'y' | 'z'
+
+/** The user's choice per axis. Unset uses the default; `z: null` keeps the scene flat along Z. */
+export type AxisSelection = Partial<Record<AxisName, string | null>>
+
+/** Keys that can be plotted: every one is numeric in at least one run. */
+export interface AxisOptions {
+  hyperparams: string[]
+  metrics: string[]
+}
 
 export interface Axis {
   key: string
@@ -36,16 +46,40 @@ export interface RunNodeLayout {
 export interface SceneLayout {
   x: Axis
   y: Axis
-  /** Null when no numeric hyperparameter varies: the scene is flat along Z. */
+  /** Null when the scene is flat along Z: nothing varies, or the user turned Z off. */
   z: Axis | null
-  /** Hyperparameters currently used as axes. */
+  /** Keys currently used as axes. */
   axisKeys: string[]
+  options: AxisOptions
   nodes: RunNodeLayout[]
 }
 
 const Z_PREFERRED_KEYS = ['dropout', 'epochs']
 const X_KEY = 'learning_rate'
 const Y_KEY = 'batch_size'
+const KEY_SCALES = new Map<string, AxisScale>([
+  [X_KEY, 'log10'],
+  [Y_KEY, 'log2'],
+])
+const FINAL_METRIC_KEYS = [
+  'final_accuracy',
+  'final_val_accuracy',
+  'final_loss',
+  'final_val_loss',
+] as const
+type FinalMetricKey = (typeof FINAL_METRIC_KEYS)[number]
+
+/** Tick labels gain digits until they differ, up to this many significant digits. */
+const MAX_TICK_PRECISION = 8
+
+function isFinalMetricKey(key: string): key is FinalMetricKey {
+  return (FINAL_METRIC_KEYS as readonly string[]).includes(key)
+}
+
+/** What a run holds for an axis key. A final metric wins over a hyperparameter of the same name. */
+export function axisValue(run: RunSummary, key: string): JsonValue | undefined {
+  return isFinalMetricKey(key) ? run[key] : run.hyperparams[key]
+}
 
 function asNumber(value: JsonValue | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -71,8 +105,20 @@ function pickZKey(runs: RunSummary[]): string | null {
   return candidates.find((key) => distinctValueCount(runs, key) >= 2) ?? null
 }
 
-function buildAxis(runs: RunSummary[], key: string, scale: AxisScale): Axis {
-  const scaled = runs.map((run) => applyScale(asNumber(run.hyperparams[key]), scale))
+function buildAxisOptions(runs: RunSummary[]): AxisOptions {
+  const isNumericSomewhere = (key: string) =>
+    runs.some((run) => asNumber(axisValue(run, key)) !== null)
+  return {
+    hyperparams: [...new Set(runs.flatMap((run) => Object.keys(run.hyperparams)))]
+      .filter((key) => !isFinalMetricKey(key) && isNumericSomewhere(key))
+      .sort(),
+    metrics: FINAL_METRIC_KEYS.filter(isNumericSomewhere),
+  }
+}
+
+function buildAxis(runs: RunSummary[], key: string): Axis {
+  const scale = KEY_SCALES.get(key) ?? 'linear'
+  const scaled = runs.map((run) => applyScale(asNumber(axisValue(run, key)), scale))
   const present = scaled.filter((v) => v !== null)
   return {
     key,
@@ -90,16 +136,23 @@ function toPosition(scaled: number, axis: Axis): number {
 }
 
 function positionOf(run: RunSummary, axis: Axis): number | null {
-  const scaled = applyScale(asNumber(run.hyperparams[axis.key]), axis.scale)
+  const scaled = applyScale(asNumber(axisValue(run, axis.key)), axis.scale)
   return scaled === null ? null : toPosition(scaled, axis)
 }
 
-/** Places runs using the default axes described in README ("Thiết kế không gian 3D"). */
-export function layoutRuns(runs: RunSummary[]): SceneLayout {
-  const x = buildAxis(runs, X_KEY, 'log10')
-  const y = buildAxis(runs, Y_KEY, 'log2')
-  const zKey = pickZKey(runs)
-  const z = zKey === null ? null : buildAxis(runs, zKey, 'linear')
+/**
+ * Places runs on the selected axes. Anything unselected, or no longer plottable in these runs,
+ * uses the defaults described in README ("Thiết kế không gian 3D").
+ */
+export function layoutRuns(runs: RunSummary[], selection: AxisSelection = {}): SceneLayout {
+  const options = buildAxisOptions(runs)
+  const plottable = (key: string | null | undefined) =>
+    key && (options.hyperparams.includes(key) || options.metrics.includes(key)) ? key : null
+
+  const x = buildAxis(runs, plottable(selection.x) ?? X_KEY)
+  const y = buildAxis(runs, plottable(selection.y) ?? Y_KEY)
+  const zKey = selection.z === null ? null : (plottable(selection.z) ?? pickZKey(runs))
+  const z = zKey === null ? null : buildAxis(runs, zKey)
 
   const nodes = runs.map((run): RunNodeLayout => {
     const px = positionOf(run, x)
@@ -112,12 +165,24 @@ export function layoutRuns(runs: RunSummary[]): SceneLayout {
     }
   })
 
-  return { x, y, z, axisKeys: [x.key, y.key, ...(z ? [z.key] : [])], nodes }
+  return { x, y, z, axisKeys: [x.key, y.key, ...(z ? [z.key] : [])], options, nodes }
+}
+
+function trioRole(key: string): string | null {
+  if (key === 'epochs') return 'epoch'
+  if (!isFinalMetricKey(key)) return null
+  return key.endsWith('accuracy') ? 'accuracy' : 'loss'
+}
+
+/** Accuracy and loss are nearly inverse, so this trio collapses the runs onto one line. */
+export function isEpochAccuracyLossTrio(keys: string[]): boolean {
+  const roles = new Set(keys.map(trioRole))
+  return roles.size === 3 && !roles.has(null)
 }
 
 /** Short human form of a number: 0.00043, 256, 0.1. */
-export function formatNumber(value: number): string {
-  return String(Number(value.toPrecision(3)))
+export function formatNumber(value: number, precision = 3): string {
+  return String(Number(value.toPrecision(precision)))
 }
 
 function fromScaled(scaled: number, scale: AxisScale): number {
@@ -139,14 +204,23 @@ function tickPoints(axis: Axis, min: number, max: number): number[] {
   return Array.from({ length: 5 }, (_, i) => min + ((max - min) * i) / 4)
 }
 
+/** Metrics can span a narrow range, where 3 digits would print the same label on every tick. */
+function tickLabels(values: number[]): string[] {
+  let labels = values.map((value) => formatNumber(value))
+  for (let precision = 4; precision <= MAX_TICK_PRECISION; precision += 1) {
+    if (new Set(labels).size === labels.length) break
+    labels = values.map((value) => formatNumber(value, precision))
+  }
+  return labels
+}
+
 export function axisTicks(axis: Axis): AxisTick[] {
-  const ticks: AxisTick[] =
-    axis.min === null || axis.max === null
-      ? []
-      : tickPoints(axis, axis.min, axis.max).map((scaled) => ({
-          label: formatNumber(fromScaled(scaled, axis.scale)),
-          position: toPosition(scaled, axis),
-        }))
+  const points = axis.min === null || axis.max === null ? [] : tickPoints(axis, axis.min, axis.max)
+  const labels = tickLabels(points.map((scaled) => fromScaled(scaled, axis.scale)))
+  const ticks: AxisTick[] = points.map((scaled, index) => ({
+    label: labels[index],
+    position: toPosition(scaled, axis),
+  }))
   if (axis.hasMissing) ticks.push({ label: 'không xác định', position: UNKNOWN_POSITION })
   return ticks
 }

@@ -125,14 +125,14 @@ created_at           status: running |        accuracy       (0–1)
                      finished_at              logged_at
 ```
 
-Ở tầng database, xoá một experiment sẽ xoá luôn các run và metrics của nó (cascade). Hiện **chưa có endpoint xoá** qua API.
+Ở tầng database, xoá một experiment sẽ xoá luôn các run và metrics của nó (cascade). API xoá dùng đúng cơ chế này.
 
 ---
 
 ## Thiết kế không gian 3D
 
 > [!NOTE]
-> Trục mặc định, màu, kích thước và trạng thái **đã được cài đặt**. Việc chọn trục và instanced mesh chưa có.
+> Trục mặc định, màu, kích thước và trạng thái **đã được cài đặt**. Instanced mesh chưa có.
 
 Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số liệu khó trả lời: *run tốt nằm ở vùng cấu hình nào?* và *vùng nào chưa được thử?* Vì vậy **vị trí thể hiện đầu vào (siêu tham số), còn hình thức thể hiện kết quả**.
 
@@ -350,17 +350,16 @@ Tất cả endpoint có tiền tố `/api`. Tài liệu đầy đủ, có thể 
 | `POST` | `/api/experiments` | Tạo experiment | 201 · 409 trùng tên |
 | `GET` | `/api/experiments` | Danh sách experiment | 200 |
 | `GET` | `/api/experiments/{id}` | Chi tiết experiment | 200 · 404 |
+| `DELETE` | `/api/experiments/{id}` | Xoá experiment cùng các run và metrics của nó | 204 · 404 |
 | `POST` | `/api/runs` | Tạo run (trạng thái ban đầu `running`) | 201 · 404 · 409 trùng tên run |
 | `GET` | `/api/runs` | Danh sách run kèm chỉ số epoch cuối. Thêm `?experiment_id=X` để lọc, bỏ trống để lấy mọi experiment | 200 · 404 |
 | `GET` | `/api/runs/{id}` | Chi tiết run kèm toàn bộ metrics theo epoch | 200 · 404 |
 | `PUT` | `/api/runs/{id}` | Cập nhật trạng thái: `completed` / `failed` / `running` | 200 · 404 · 409 |
+| `DELETE` | `/api/runs/{id}` | Xoá run cùng metrics của nó | 204 · 404 |
 | `POST` | `/api/runs/{id}/metrics` | Ghi metrics cho 1 epoch | 201 · 404 · 409 epoch đã ghi |
 | `POST` | `/api/copilot/chat` | Hỏi trợ lý AI, trả về `message` + `actions` | 200 · 422 |
 
 Dữ liệu gửi lên sai định dạng luôn trả về **422**, kèm thông báo chỉ rõ field nào sai.
-
-> [!NOTE]
-> Chưa có endpoint `DELETE`. Dự kiến bổ sung ở Phase 2.
 
 ### Ví dụ với `curl`
 

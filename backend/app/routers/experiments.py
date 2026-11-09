@@ -31,3 +31,13 @@ async def list_experiments(db: DbSession):
 )
 async def get_experiment(experiment_id: int, db: DbSession):
     return await tracking.get_experiment(db, experiment_id)
+
+
+@router.delete(
+    "/{experiment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(404),
+    summary="Delete an experiment with its runs and metrics",
+)
+async def delete_experiment(experiment_id: int, db: DbSession) -> None:
+    await tracking.delete_experiment(db, experiment_id)

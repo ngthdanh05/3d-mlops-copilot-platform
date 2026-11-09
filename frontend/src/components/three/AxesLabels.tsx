@@ -34,7 +34,7 @@ function AxisGuide({ axis, from, to, tickAt, titleAt }: AxisGuideProps) {
     <>
       <Line points={[from, to]} color={AXIS_COLOR} lineWidth={1.5} />
       {axisTicks(axis).map((tick) => (
-        <Label key={tick.label} position={tickAt(tick.position)} className="text-[10px] text-slate-400">
+        <Label key={tick.position} position={tickAt(tick.position)} className="text-[10px] text-slate-400">
           {tick.label}
         </Label>
       ))}

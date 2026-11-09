@@ -1,11 +1,11 @@
 import type { RunSummary } from '../lib/types'
 import { colorMetric } from './color-utils'
-import { formatNumber } from './coordinate-mapper'
+import { axisValue, formatNumber } from './coordinate-mapper'
 
 const TOP_RUN_COUNT = 3
 
 function rangeText(runs: RunSummary[], key: string): string | null {
-  const values = runs.map((run) => run.hyperparams[key]).filter((v) => typeof v === 'number')
+  const values = runs.map((run) => axisValue(run, key)).filter((v) => typeof v === 'number')
   if (values.length === 0) return null
   const low = formatNumber(Math.min(...values))
   const high = formatNumber(Math.max(...values))

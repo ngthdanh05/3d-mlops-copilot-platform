@@ -1,11 +1,17 @@
 import { Billboard, Html, Line, useCursor } from '@react-three/drei'
-import type { ThreeEvent } from '@react-three/fiber'
-import { memo, useState } from 'react'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { memo, useRef, useState } from 'react'
+import { Vector3, type Group } from 'three'
 import type { JsonValue, RunStatus, RunSummary } from '../../lib/types'
 import { useCameraStore } from '../../store/useCameraStore'
 import { useRunStore } from '../../store/useRunStore'
 import { colorMetric } from '../../utils/color-utils'
-import { formatNumber, SCENE_SIZE, type RunNodeLayout } from '../../utils/coordinate-mapper'
+import {
+  axisValue,
+  formatNumber,
+  SCENE_SIZE,
+  type RunNodeLayout,
+} from '../../utils/coordinate-mapper'
 
 /** Keeps small spheres easy to hit with the pointer. */
 const MIN_HIT_RADIUS = 0.35
@@ -14,6 +20,9 @@ const CLICK_DRAG_TOLERANCE = 4
 const DIMMED_OPACITY = 0.18
 const OFF_GRID_OPACITY = 0.3
 const GUIDE_COLOR = '#94a3b8'
+const MOVE_SPEED = 6
+const ARRIVAL_THRESHOLD = 0.005
+const moveTarget = new Vector3()
 
 function StatusMark({ status, radius }: { status: RunStatus; radius: number }) {
   if (status === 'running') {
@@ -67,9 +76,9 @@ function GuideLines({ position }: { position: RunNodeLayout['position'] }) {
   )
 }
 
-function formatHyperparam(value: JsonValue | undefined): string {
+function formatAxisValue(value: JsonValue | undefined): string {
   if (typeof value === 'number') return formatNumber(value)
-  return value === undefined ? 'không có' : String(value)
+  return value === undefined || value === null ? 'không có' : String(value)
 }
 
 function RunCallout({ run, axisKeys }: { run: RunSummary; axisKeys: string[] }) {
@@ -84,7 +93,7 @@ function RunCallout({ run, axisKeys }: { run: RunSummary; axisKeys: string[] }) 
       )}
       {axisKeys.map((key) => (
         <div key={key} className="text-slate-400">
-          {key}: {formatHyperparam(run.hyperparams[key])}
+          {key}: {formatAxisValue(axisValue(run, key))}
         </div>
       ))}
     </div>
@@ -113,6 +122,18 @@ export const RunNode = memo(function RunNode({ node, axisKeys, color, radius }: 
   const [isHovered, setHovered] = useState(false)
   useCursor(isHovered)
 
+  // The prop stays fixed so three.js does not jump; the frame loop glides to each new position.
+  const groupRef = useRef<Group>(null)
+  const [initialPosition] = useState(position)
+  useFrame((_, delta) => {
+    const group = groupRef.current
+    if (!group) return
+    moveTarget.set(...position)
+    if (group.position.equals(moveTarget)) return
+    group.position.lerp(moveTarget, 1 - Math.exp(-MOVE_SPEED * delta))
+    if (group.position.distanceTo(moveTarget) < ARRIVAL_THRESHOLD) group.position.copy(moveTarget)
+  })
+
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation()
     if (event.delta > CLICK_DRAG_TOLERANCE) return
@@ -124,7 +145,7 @@ export const RunNode = memo(function RunNode({ node, axisKeys, color, radius }: 
   const opacity = isOffGrid ? OFF_GRID_OPACITY : isDimmed && !isHovered ? DIMMED_OPACITY : 1
 
   return (
-    <group position={position}>
+    <group ref={groupRef} position={initialPosition}>
       <mesh>
         <sphereGeometry args={[radius, 24, 24]} />
         <meshStandardMaterial
