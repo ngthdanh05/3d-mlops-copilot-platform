@@ -24,7 +24,9 @@ from app.services.errors import ServiceError
 
 logger = logging.getLogger(__name__)
 
-MAX_TOOL_ROUNDS = 5
+# Longest legitimate chat, if the model makes one call per round: name lookup, two queries,
+# three UI tools, an empty reply that gets nudged, and the answer.
+MAX_TOOL_ROUNDS = 8
 
 _TOOLS = {tool.name: tool for tool in [*QUERY_TOOLS, *UI_TOOLS]}
 _TOOL_DEFINITIONS = [
@@ -34,9 +36,20 @@ _TOOL_DEFINITIONS = [
 
 _LLM_ERROR_MESSAGE = "Trợ lý AI đang gặp sự cố. Bạn hãy thử lại sau ít phút."
 _ANSWER_NOW_PROMPT = "Now write your final answer to my question, following your rules."
+_SHOW_RUNS_PROMPT = (
+    "You did not mark these runs in the chart. "
+    "Call highlight_runs, focus_camera and open_inspector for them now."
+)
 _RATE_LIMIT_MESSAGE = "Đã chạm giới hạn lượt gọi miễn phí của Gemini. Bạn hãy thử lại sau một phút."
 _EMPTY_REPLY_MESSAGE = "Trợ lý AI không đưa ra được câu trả lời. Bạn hãy thử hỏi lại."
 _TOO_MANY_ROUNDS_MESSAGE = "Câu hỏi này cần quá nhiều bước tra cứu. Bạn hãy hỏi cụ thể hơn."
+
+# Tools whose answer is about specific runs, so the chart should show those runs.
+_RUN_ANSWER_TOOLS = {"find_best_runs", "compare_runs", "detect_overfitting"}
+
+
+def _found_runs_to_show(tool_name: str, result: dict[str, Any]) -> bool:
+    return tool_name in _RUN_ANSWER_TOOLS and "error" not in result and result.get("runs") != []
 
 
 async def _run_tool(call: ToolCall, context: ToolContext) -> dict[str, Any]:
@@ -59,11 +72,27 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
     context = ToolContext(db=db, experiment_id=request.experiment_id)
     messages = [LLMMessage(role="user", content=request.message)]
     nudged = False
+    has_runs_to_show = False
+    # An answer written before its runs were marked. Kept as is, so its numbers cannot change.
+    held_answer: str | None = None
 
     try:
         for _ in range(MAX_TOOL_ROUNDS):
             reply = await llm.complete(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS)
             if not reply.tool_calls:
+                if held_answer:
+                    return ChatResponse(message=held_answer, actions=context.actions)
+                if reply.text and has_runs_to_show and not context.actions:
+                    held_answer = reply.text
+                    messages.append(
+                        LLMMessage(
+                            role="assistant",
+                            content=reply.text,
+                            provider_content=reply.provider_content,
+                        )
+                    )
+                    messages.append(LLMMessage(role="user", content=_SHOW_RUNS_PROMPT))
+                    continue
                 if reply.text or nudged:
                     return ChatResponse(
                         message=reply.text or _EMPTY_REPLY_MESSAGE, actions=context.actions
@@ -83,6 +112,7 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
             )
             for call in reply.tool_calls:
                 result = await _run_tool(call, context)
+                has_runs_to_show = has_runs_to_show or _found_runs_to_show(call.name, result)
                 messages.append(
                     LLMMessage(
                         role="tool",
@@ -91,11 +121,13 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
                         content=json.dumps(result, ensure_ascii=False),
                     )
                 )
+            if held_answer:
+                return ChatResponse(message=held_answer, actions=context.actions)
     except LLMRateLimitError:
         logger.warning("LLM quota exceeded")
-        return ChatResponse(message=_RATE_LIMIT_MESSAGE, actions=context.actions)
+        return ChatResponse(message=held_answer or _RATE_LIMIT_MESSAGE, actions=context.actions)
     except LLMError:
         logger.exception("LLM call failed")
-        return ChatResponse(message=_LLM_ERROR_MESSAGE)
+        return ChatResponse(message=held_answer or _LLM_ERROR_MESSAGE)
 
-    return ChatResponse(message=_TOO_MANY_ROUNDS_MESSAGE, actions=context.actions)
+    return ChatResponse(message=held_answer or _TOO_MANY_ROUNDS_MESSAGE, actions=context.actions)

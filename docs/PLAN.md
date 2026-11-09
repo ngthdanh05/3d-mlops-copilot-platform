@@ -17,33 +17,29 @@ Cập nhật 2026-11-09, đối chiếu với code. ✅ là đã xong, 🚧 là 
 | --- | --- | --- | --- |
 | 1. Backend & MLOps | 7 | 0 | 0 |
 | 2. Không gian 3D | 11 | 1 | 0 |
-| 3. AI Copilot | 4 | 4 | 0 |
+| 3. AI Copilot | 8 | 0 | 0 |
 | 4. Đồng bộ & hoàn thiện | 0 | 5 | 2 |
 | 5. Kiểm thử & demo | 0 | 2 | 3 |
-| **Tổng (39 task)** | **22** | **12** | **5** |
+| **Tổng (39 task)** | **26** | **8** | **5** |
 
 Việc còn lại, xếp theo thứ tự nên làm:
 
 | # | Task | Trạng thái | Còn thiếu |
 | --- | --- | --- | --- |
-| 1 | P3-T02 Query Tools | 🚧 | `list_experiments`, `get_run`, `compare_runs`, `detect_overfitting` |
-| 2 | P3-T05 Copilot Endpoint | 🚧 | Trả lời câu hỏi so sánh và chẩn đoán, sau khi có tool |
-| 3 | Thang màu (phát sinh) | Chưa làm | Các run tốt khó phân biệt khi có nhiều run xấu, thấy rõ ở `real-mnist-mlp` |
-| 4 | P2-T09 Inspector Panel | 🚧 | Biểu đồ accuracy/loss theo epoch |
-| 5 | P3-T08 Copilot Tests | 🚧 | Bộ câu hỏi kiểm tra độ chính xác |
-| 6 | P4-T02 Sidebar | 🚧 | Danh sách run, tìm kiếm |
-| 7 | P4-T01 State Sync | 🚧 | Gợi ý câu hỏi khi click, bộ lọc |
-| 8 | P3-T06 Chat Panel | 🚧 | Render Markdown |
-| 9 | P4-T06 Error & Loading | 🚧 | Nút thử lại, skeleton |
-| 10 | P4-T04 Hiệu năng 3D | Chưa làm | Instanced mesh, đo 200 node |
-| 11 | P4-T05 Chat UX | Chưa làm | Streaming, câu hỏi gợi ý, lưu lịch sử |
-| 12 | P4-T03 Node Visual | 🚧 | Hiệu ứng xuất hiện |
-| 13 | P4-T07 Responsive | 🚧 | Thu gọn panel, toàn màn hình |
-| 14 | P5-T03 Frontend Tests | Chưa làm | Cài Vitest, test logic toạ độ và store |
-| 15 | P5-T02 API Tests | 🚧 | Ca database trống, 100+ run |
-| 16 | P5-T01 Smoke Test | Chưa làm | Script tự động, ảnh chụp |
-| 17 | P5-T04 Benchmark | Chưa làm | Đo và ghi `docs/performance.md` |
-| 18 | P5-T05 Demo & tài liệu | 🚧 | Kịch bản demo, ảnh chụp |
+| 1 | Thang màu (phát sinh) | Chưa làm | Các run tốt khó phân biệt khi có nhiều run xấu, thấy rõ ở `real-mnist-mlp` |
+| 2 | P2-T09 Inspector Panel | 🚧 | Biểu đồ accuracy/loss theo epoch |
+| 3 | P4-T02 Sidebar | 🚧 | Danh sách run, tìm kiếm |
+| 4 | P4-T01 State Sync | 🚧 | Gợi ý câu hỏi khi click, bộ lọc |
+| 5 | P4-T06 Error & Loading | 🚧 | Nút thử lại, skeleton |
+| 6 | P4-T04 Hiệu năng 3D | Chưa làm | Instanced mesh, đo 200 node |
+| 7 | P4-T05 Chat UX | Chưa làm | Streaming, câu hỏi gợi ý, lưu lịch sử |
+| 8 | P4-T03 Node Visual | 🚧 | Hiệu ứng xuất hiện |
+| 9 | P4-T07 Responsive | 🚧 | Thu gọn panel, toàn màn hình |
+| 10 | P5-T03 Frontend Tests | Chưa làm | Cài Vitest, test logic toạ độ và store |
+| 11 | P5-T02 API Tests | 🚧 | Ca database trống, 100+ run |
+| 12 | P5-T01 Smoke Test | Chưa làm | Script tự động, ảnh chụp |
+| 13 | P5-T04 Benchmark | Chưa làm | Đo và ghi `docs/performance.md` |
+| 14 | P5-T05 Demo & tài liệu | 🚧 | Kịch bản demo, ảnh chụp |
 
 ---
 
@@ -288,8 +284,8 @@ Câu hỏi ──► Engine ──► LLM (kèm danh sách tool)
 | Intent | Tool truy vấn                                                    | Action trên giao diện            |
 | ------ | ---------------------------------------------------------------- | -------------------------------- |
 | AI-01  | `find_best_runs`                                                 | `highlight_runs`, `focus_camera` |
-| AI-02  | `compare_runs`                                                   | `highlight_runs`                 |
-| AI-03  | `detect_overfitting`, `get_run`                                  | `focus_camera`, `open_inspector` |
+| AI-02  | `find_runs_by_name`, `compare_runs`                              | `highlight_runs`                 |
+| AI-03  | `find_runs_by_name`, `detect_overfitting`, `get_run`             | `focus_camera`, `open_inspector` |
 | AI-04  | `list_experiments`, `find_best_runs`, thêm `summarize_experiment` khi làm task này | Không bắt buộc |
 | AI-05  | `find_best_runs`, `compare_runs`                                 | `highlight_runs`                 |
 
@@ -688,8 +684,8 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Tạo `llm_client.py`: một interface hỗ trợ tool calling, kèm bản giả (fake) để test không tốn API
   - **DoD:** Gọi LLM với một tool mẫu → nhận được tool call đúng tên và tham số
 
-- [ ] 🚧 **P3-T02: Query Tools** (mới có `find_best_runs`; còn `list_experiments`, `get_run`, `compare_runs`, `detect_overfitting`)
-  - `query_tools.py`: `list_experiments`, `find_best_runs`, `get_run`, `compare_runs`, `detect_overfitting`
+- [x] ✅ **P3-T02: Query Tools**
+  - `query_tools.py`: `list_experiments`, `find_best_runs`, `find_runs_by_name`, `get_run`, `compare_runs`, `detect_overfitting`
   - Tool gọi service layer, không truy vấn database trực tiếp
   - `detect_overfitting`: tính khoảng cách train/val qua các epoch bằng code
   - **DoD:** Mỗi tool có unit test với dữ liệu seed; run không tồn tại trả lỗi rõ ràng cho LLM
@@ -704,7 +700,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - `schemas/copilot.py`: `ChatRequest`, `ChatResponse`, các kiểu `Action`
   - **DoD:** Schema khớp ví dụ ở mục 2.3; OpenAPI hiển thị đúng
 
-- [ ] 🚧 **P3-T05: Copilot API Endpoint** (đã chạy với Gemini cho câu hỏi run tốt nhất; còn so sánh và chẩn đoán)
+- [x] ✅ **P3-T05: Copilot API Endpoint**
   - `POST /api/copilot/chat`:
     - Request: `{ "message": str, "experiment_id": int (optional) }`
     - Flow: gửi câu hỏi + danh sách tool → chạy tool call → lặp đến khi LLM trả lời (có giới hạn số vòng) → gom actions
@@ -712,7 +708,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Error handling: LLM timeout hoặc lỗi → thông báo thân thiện, không trả 500 thô
   - **DoD:** 3 loại câu hỏi (best run, compare, diagnose) trả lời đúng số liệu trong database
 
-- [ ] 🚧 **P3-T06: Chat Panel UI** (đã chat được; còn render Markdown)
+- [x] ✅ **P3-T06: Chat Panel UI**
   - `<ChatPanel>`: message list + input
   - `<ChatMessage>`: render Markdown (react-markdown), differentiate user/AI bubbles
   - `<ChatInput>`: text input + send button + loading indicator
@@ -727,7 +723,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - RunNode listens: nếu highlighted → add orange emissive ring
   - **DoD:** AI says "best run is run-003" → node run-003 glows + camera flies to it
 
-- [ ] 🚧 **P3-T08: Copilot Engine Tests** (đã có test engine và tool; còn bộ câu hỏi kiểm tra độ chính xác)
+- [x] ✅ **P3-T08: Copilot Engine Tests**
   - Unit tests cho query tools, UI tools và vòng lặp engine
   - Integration test: fake LLM trả tool call → kiểm tra toàn bộ pipeline
   - Bộ câu hỏi kiểm tra độ chính xác của AI: đối chiếu số trong câu trả lời với database

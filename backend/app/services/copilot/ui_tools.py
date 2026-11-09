@@ -7,16 +7,12 @@ from pydantic import Field
 from app.schemas.base import InputSchema
 from app.schemas.copilot import FocusCameraAction, HighlightRunsAction, OpenInspectorAction
 from app.services import tracking
-from app.services.copilot.tool_base import Tool, ToolContext
+from app.services.copilot.tool_base import RunIdArgs, Tool, ToolContext
 from app.services.errors import NotFoundError
 
 
 class HighlightRunsArgs(InputSchema):
     run_ids: list[int] = Field(min_length=1, max_length=50, description="Runs to highlight")
-
-
-class RunIdArgs(InputSchema):
-    run_id: int = Field(ge=1)
 
 
 async def _highlight_runs(context: ToolContext, args: HighlightRunsArgs) -> dict[str, Any]:
