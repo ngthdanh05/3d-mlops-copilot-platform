@@ -1,0 +1,32 @@
+# Repo-wide safety net for sensitive files. These patterns apply to every
+# directory; tool and build output stays in backend/ and frontend/.gitignore.
+
+# Environment files (.env.example is the only one meant to be committed)
+.env
+.env.*
+!.env.example
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
+# Cloud and service credentials
+credentials*.json
+service-account*.json
+client_secret*.json
+.netrc
+.pypirc
+
+# Local databases (may hold real data)
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Per-user Claude Code settings
+.claude/settings.local.json
