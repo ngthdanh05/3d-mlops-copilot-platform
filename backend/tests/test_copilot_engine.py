@@ -10,7 +10,7 @@ import asyncio
 import json
 import os
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from statistics import median
@@ -37,6 +37,7 @@ from app.services.copilot.llm_client import (
 from app.utils.seed_data import PROFILES, seed_database
 
 CHAT = "/api/copilot/chat"
+CHAT_STREAM = "/api/copilot/chat/stream"
 
 
 @dataclass
@@ -54,6 +55,14 @@ class ScriptedLLM:
         if isinstance(reply, Exception):
             raise reply
         return reply
+
+    async def stream(
+        self, system: str, messages: list[LLMMessage], tools: list[ToolDefinition]
+    ) -> AsyncIterator[str | LLMReply]:
+        reply = await self.complete(system, messages, tools)
+        if reply.text:
+            yield reply.text
+        yield reply
 
 
 def use_llm(llm: ScriptedLLM) -> ScriptedLLM:
@@ -90,6 +99,78 @@ async def make_run(
     if status != "running":
         await client.put(f"/api/runs/{run_id}", json={"status": status})
     return run_id
+
+
+async def stream_events(client, message: str, experiment_id: int | None = None) -> list[dict]:
+    response = await client.post(
+        CHAT_STREAM, json={"message": message, "experiment_id": experiment_id}
+    )
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    return [json.loads(block[6:]) for block in response.text.split("\n\n") if block]
+
+
+def streamed_text(events: list[dict]) -> str:
+    return "".join(event["text"] for event in events if event["type"] == "delta")
+
+
+async def test_stream_sends_text_in_pieces_then_the_same_answer_and_actions(client):
+    exp = await make_experiment(client)
+    best = await make_run(client, exp, "run-b", 0.95, 0.2)
+
+    events = await stream_events(client, "Run nào tốt nhất?", exp)
+
+    assert sum(event["type"] == "delta" for event in events) > 1
+    assert events[-1]["type"] == "done"
+    assert streamed_text(events) == events[-1]["message"]
+    assert "0.9500" in events[-1]["message"]
+    assert events[-1]["actions"][0] == {"type": "highlight_runs", "run_ids": [best]}
+
+
+async def test_stream_retracts_text_written_alongside_a_tool_call(client):
+    use_llm(
+        ScriptedLLM(
+            [
+                LLMReply(text="Để tôi xem...", tool_calls=[call("list_experiments")]),
+                LLMReply(text="Câu trả lời."),
+            ]
+        )
+    )
+
+    events = await stream_events(client, "q")
+
+    assert [event["type"] for event in events] == ["delta", "reset", "delta", "done"]
+    assert events[-1]["message"] == "Câu trả lời."
+
+
+async def test_stream_does_not_extend_an_answer_that_is_being_held(client):
+    exp = await make_experiment(client)
+    run = await make_run(client, exp, "run-a", 0.9, 0.2)
+    use_llm(
+        ScriptedLLM(
+            [
+                LLMReply(tool_calls=[call("find_best_runs", metric="val_accuracy")]),
+                LLMReply(text="Giữ nguyên."),
+                LLMReply(text="Viết lại.", tool_calls=[call("focus_camera", run_id=run)]),
+            ]
+        )
+    )
+
+    events = await stream_events(client, "q", exp)
+
+    assert streamed_text(events) == "Giữ nguyên."
+    assert all(event["type"] != "reset" for event in events)
+    assert events[-1]["message"] == "Giữ nguyên."
+    assert events[-1]["actions"] == [{"type": "focus_camera", "run_id": run}]
+
+
+async def test_stream_reports_llm_failure_in_the_final_event(client):
+    use_llm(ScriptedLLM([LLMError("boom")]))
+
+    events = await stream_events(client, "q")
+
+    assert [event["type"] for event in events] == ["done"]
+    assert "sự cố" in events[0]["message"]
 
 
 async def test_fake_llm_finds_best_run_and_returns_actions(client):

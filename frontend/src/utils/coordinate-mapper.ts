@@ -48,7 +48,7 @@ export interface SceneLayout {
   y: Axis
   /** Null when the scene is flat along Z: nothing varies, or the user turned Z off. */
   z: Axis | null
-  /** Keys currently used as axes. */
+  /** Distinct keys currently used as axes. */
   axisKeys: string[]
   options: AxisOptions
   nodes: RunNodeLayout[]
@@ -165,7 +165,9 @@ export function layoutRuns(runs: RunSummary[], selection: AxisSelection = {}): S
     }
   })
 
-  return { x, y, z, axisKeys: [x.key, y.key, ...(z ? [z.key] : [])], options, nodes }
+  // A set because the user may plot one key on two axes.
+  const axisKeys = [...new Set([x.key, y.key, ...(z ? [z.key] : [])])]
+  return { x, y, z, axisKeys, options, nodes }
 }
 
 function trioRole(key: string): string | null {

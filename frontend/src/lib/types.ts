@@ -56,8 +56,16 @@ export interface CopilotResponse {
   actions: CopilotAction[]
 }
 
+/** One event of `POST /api/copilot/chat/stream`. `done` carries the authoritative answer. */
+export type CopilotStreamEvent =
+  | { type: 'delta'; text: string }
+  | { type: 'reset' }
+  | ({ type: 'done' } & CopilotResponse)
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /** The question never got an answer from the backend, so it can be sent again. */
+  failed?: boolean
 }

@@ -36,3 +36,22 @@ Action = Annotated[
 class ChatResponse(BaseModel):
     message: str
     actions: list[Action] = Field(default_factory=list)
+
+
+class TextDeltaEvent(BaseModel):
+    """More text of the answer being written."""
+
+    type: Literal["delta"] = "delta"
+    text: str
+
+
+class TextResetEvent(BaseModel):
+    """The text streamed so far is not the answer; discard it."""
+
+    type: Literal["reset"] = "reset"
+
+
+class DoneEvent(ChatResponse):
+    """The authoritative answer. It replaces whatever was streamed."""
+
+    type: Literal["done"] = "done"

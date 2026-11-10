@@ -16,6 +16,7 @@ from app.services.copilot.llm_client import (
     LLMError,
     LLMMessage,
     LLMRateLimitError,
+    LLMReply,
     ToolDefinition,
     get_llm_client,
 )
@@ -129,6 +130,59 @@ async def test_blocked_response_has_no_text_or_calls():
     server = FakeGeminiServer(httpx.Response(200, json={"candidates": []}))
     reply = await server.client().complete("s", [USER], TOOLS)
     assert reply.text is None and reply.tool_calls == []
+
+
+def sse(*chunks: dict) -> httpx.Response:
+    body = "".join(f"data: {json.dumps(chunk)}\n\n" for chunk in chunks)
+    return httpx.Response(200, headers={"content-type": "text/event-stream"}, text=body)
+
+
+async def collect(stream) -> tuple[list[str], LLMReply]:
+    items = [item async for item in stream]
+    return items[:-1], items[-1]
+
+
+async def test_stream_yields_text_pieces_and_hides_thoughts():
+    server = FakeGeminiServer(
+        sse(
+            gemini_reply({"text": "plan", "thought": True}),
+            gemini_reply({"text": "Xin "}),
+            gemini_reply({"text": "chào"}),
+        )
+    )
+
+    pieces, reply = await collect(server.client("my-model").stream("s", [USER], TOOLS))
+
+    assert pieces == ["Xin ", "chào"]
+    assert reply.text == "Xin chào" and reply.tool_calls == []
+    assert "models/my-model:streamGenerateContent" in server.urls[0]
+
+
+async def test_stream_keeps_tool_calls_and_signature_for_the_next_turn():
+    server = FakeGeminiServer(
+        sse(
+            gemini_reply(
+                {
+                    "functionCall": {"id": "c1", "name": "find_best_runs", "args": {}},
+                    "thoughtSignature": "c2ln",
+                }
+            )
+        ),
+    )
+
+    pieces, reply = await collect(server.client().stream("s", [USER], TOOLS))
+
+    assert pieces == []
+    assert [(c.id, c.name) for c in reply.tool_calls] == [("c1", "find_best_runs")]
+    assert reply.provider_content.parts[0].thought_signature == b"sig"
+
+
+async def test_stream_quota_error_is_distinguished():
+    server = FakeGeminiServer(
+        *[httpx.Response(429, json={"error": {"code": 429, "message": "x"}}) for _ in range(10)]
+    )
+    with pytest.raises(LLMRateLimitError):
+        await collect(server.client().stream("s", [USER], TOOLS))
 
 
 @pytest.mark.parametrize("status", [400, 429, 500])

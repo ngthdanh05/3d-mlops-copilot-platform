@@ -1,6 +1,8 @@
 import Markdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { retryLastQuestion } from '../../hooks/useCopilot'
 import type { ChatMessage as Message } from '../../lib/types'
+import { useChatStore } from '../../store/useChatStore'
 
 const REMARK_PLUGINS = [remarkGfm]
 const HEADING_CLASS = 'mt-3 font-semibold text-slate-100 first:mt-0'
@@ -43,6 +45,19 @@ const MARKDOWN_COMPONENTS: Components = {
 }
 
 export function ChatMessage({ message }: { message: Message }) {
+  const isStreaming = useChatStore((state) => state.streamingMessageId === message.id)
+  const canRetry = useChatStore(
+    (state) =>
+      state.streamingMessageId === null && state.messages[state.messages.length - 1] === message,
+  )
+
+  if (isStreaming && message.content === '') {
+    return (
+      <p role="status" className="mr-8 animate-pulse px-3 py-2 text-slate-400">
+        Đang tra cứu dữ liệu...
+      </p>
+    )
+  }
   if (message.role === 'user') {
     // The user's own text is shown exactly as typed.
     return (
@@ -56,6 +71,15 @@ export function ChatMessage({ message }: { message: Message }) {
       <Markdown remarkPlugins={REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>
         {message.content}
       </Markdown>
+      {message.failed && canRetry && (
+        <button
+          type="button"
+          onClick={retryLastQuestion}
+          className="mt-2 rounded bg-slate-800 px-3 py-1 text-xs font-medium text-slate-100 hover:bg-slate-700"
+        >
+          Thử lại
+        </button>
+      )}
     </div>
   )
 }

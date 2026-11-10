@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Native scrollbars, sliders and dropdowns follow the app's dark theme. */
+:root {
+  color-scheme: dark;
+}

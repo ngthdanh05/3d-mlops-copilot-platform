@@ -2,10 +2,10 @@ import { COLOR_STOPS, type LegendInfo } from '../../utils/color-utils'
 
 export function ColorLegend({ legend }: { legend: LegendInfo | null }) {
   return (
-    <div className="pointer-events-none absolute bottom-3 right-3 z-20 w-48 rounded bg-slate-900/85 p-3 text-xs leading-relaxed text-slate-300">
-      <div className="mb-1 font-medium text-slate-100">Cách đọc đồ thị</div>
-      <div>Mỗi quả cầu là một lần huấn luyện.</div>
-      <div>Vị trí: theo 3 trục đang chọn.</div>
+    <div className="pointer-events-none absolute bottom-3 right-3 z-20 w-36 rounded bg-slate-900/85 p-3 text-xs leading-relaxed text-slate-300 sm:w-48">
+      <div className="mb-1 hidden font-medium text-slate-100 sm:block">Cách đọc đồ thị</div>
+      <div className="hidden sm:block">Mỗi quả cầu là một lần huấn luyện.</div>
+      <div className="hidden sm:block">Vị trí: theo 3 trục đang chọn.</div>
       {legend && (
         <div className="my-1.5">
           <div>Càng sáng: {legend.label} càng cao</div>
