@@ -1,12 +1,14 @@
 from typing import Annotated, Any
 
-from fastapi import Depends
+from fastapi import Depends, Path
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.schemas.base import SQLITE_INT_MAX
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+PathId = Annotated[int, Path(ge=1, le=SQLITE_INT_MAX)]
 
 
 class ErrorResponse(BaseModel):

@@ -3,10 +3,10 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.models import Experiment, Metric, Run, RunStatus
 from app.schemas import ExperimentCreate, MetricCreate, RankingMetric, RunCreate, RunUpdate
@@ -58,8 +58,14 @@ async def create_run(db: AsyncSession, data: RunCreate) -> Run:
 
 
 async def list_runs(db: AsyncSession, experiment_id: int | None = None) -> Sequence[Run]:
-    """Runs (with metrics loaded, for final-metric summaries), oldest first."""
-    stmt = select(Run).options(selectinload(Run.metrics)).order_by(Run.id)
+    """Runs, oldest first. `metrics` holds only each run's last epoch, for final summaries."""
+    later = aliased(Metric)
+    last_epoch = select(func.max(later.epoch)).where(later.run_id == Metric.run_id)
+    stmt = (
+        select(Run)
+        .options(selectinload(Run.metrics.and_(Metric.epoch == last_epoch.scalar_subquery())))
+        .order_by(Run.id)
+    )
     if experiment_id is not None:
         await get_experiment(db, experiment_id)
         stmt = stmt.where(Run.experiment_id == experiment_id)

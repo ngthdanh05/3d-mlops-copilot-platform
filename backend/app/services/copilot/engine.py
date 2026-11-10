@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -15,6 +16,7 @@ from app.schemas.copilot import (
     TextDeltaEvent,
     TextResetEvent,
 )
+from app.services import tracking
 from app.services.copilot.llm_client import (
     LLMClient,
     LLMError,
@@ -33,7 +35,7 @@ from app.services.errors import ServiceError
 logger = logging.getLogger(__name__)
 
 # Longest legitimate chat, if the model makes one call per round: name lookup, two queries,
-# three UI tools, an empty reply that gets nudged, and the answer.
+# three UI tools on request, an empty reply that gets nudged, and the answer.
 MAX_TOOL_ROUNDS = 8
 
 _TOOLS = {tool.name: tool for tool in [*QUERY_TOOLS, *UI_TOOLS]}
@@ -44,20 +46,26 @@ _TOOL_DEFINITIONS = [
 
 _LLM_ERROR_MESSAGE = "Trợ lý AI đang gặp sự cố. Bạn hãy thử lại sau ít phút."
 _ANSWER_NOW_PROMPT = "Now write your final answer to my question, following your rules."
-_SHOW_RUNS_PROMPT = (
-    "You did not mark these runs in the chart. "
-    "Call highlight_runs, focus_camera and open_inspector for them now."
-)
 _RATE_LIMIT_MESSAGE = "Đã chạm giới hạn lượt gọi miễn phí của Gemini. Bạn hãy thử lại sau một phút."
 _EMPTY_REPLY_MESSAGE = "Trợ lý AI không đưa ra được câu trả lời. Bạn hãy thử hỏi lại."
 _TOO_MANY_ROUNDS_MESSAGE = "Câu hỏi này cần quá nhiều bước tra cứu. Bạn hãy hỏi cụ thể hơn."
 
-# Tools whose answer is about specific runs, so the chart should show those runs.
-_RUN_ANSWER_TOOLS = {"find_best_runs", "compare_runs", "detect_overfitting"}
+_WORD = re.compile(r"[\w.-]+")
 
 
-def _found_runs_to_show(tool_name: str, result: dict[str, Any]) -> bool:
-    return tool_name in _RUN_ANSWER_TOOLS and "error" not in result and result.get("runs") != []
+async def _named_runs_note(db: AsyncSession, request: ChatRequest) -> LLMMessage | None:
+    """The run_id of runs the question names, which saves the model a lookup round."""
+    words = [word.strip(".-") for word in _WORD.findall(request.message)]
+    try:
+        runs = await tracking.find_runs_by_name(db, words, experiment_id=request.experiment_id)
+    except ServiceError:  # the model reports an unknown experiment when it uses a tool
+        return None
+    if not runs:
+        return None
+    listed = ", ".join(
+        f"{run.run_name} is run_id {run.id} in experiment {run.experiment_id}" for run in runs
+    )
+    return LLMMessage(role="user", content=f"Note: {listed}.")
 
 
 async def _run_tool(call: ToolCall, context: ToolContext) -> dict[str, Any]:
@@ -85,10 +93,9 @@ async def answer_events(
     """Run the loop, yielding answer text as it arrives. Always ends with one `DoneEvent`."""
     context = ToolContext(db=db, experiment_id=request.experiment_id)
     messages = [LLMMessage(role="user", content=request.message)]
+    if note := await _named_runs_note(db, request):
+        messages.append(note)
     nudged = False
-    has_runs_to_show = False
-    # An answer written before its runs were marked. Kept as is, so its numbers cannot change.
-    held_answer: str | None = None
 
     try:
         for _ in range(MAX_TOOL_ROUNDS):
@@ -97,29 +104,15 @@ async def answer_events(
                 async for item in llm.stream(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS):
                     if isinstance(item, LLMReply):
                         reply = item
-                    elif held_answer is None:
+                    else:
                         yield TextDeltaEvent(text=item)
             else:
                 reply = await llm.complete(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS)
 
             if not reply.tool_calls:
-                if held_answer:
-                    yield DoneEvent(message=held_answer, actions=context.actions)
-                    return
-                if reply.text and has_runs_to_show and not context.actions:
-                    held_answer = reply.text
-                    messages.append(
-                        LLMMessage(
-                            role="assistant",
-                            content=reply.text,
-                            provider_content=reply.provider_content,
-                        )
-                    )
-                    messages.append(LLMMessage(role="user", content=_SHOW_RUNS_PROMPT))
-                    continue
                 if reply.text or nudged:
                     yield DoneEvent(
-                        message=reply.text or _EMPTY_REPLY_MESSAGE, actions=context.actions
+                        message=reply.text or _EMPTY_REPLY_MESSAGE, actions=context.final_actions
                     )
                     return
                 # Models sometimes stop silently after their last tool call.
@@ -128,7 +121,7 @@ async def answer_events(
                 continue
 
             # Text written alongside tool calls is thinking aloud, not the answer.
-            if reply.text and held_answer is None:
+            if reply.text:
                 yield TextResetEvent()
             messages.append(
                 LLMMessage(
@@ -140,7 +133,6 @@ async def answer_events(
             )
             for call in reply.tool_calls:
                 result = await _run_tool(call, context)
-                has_runs_to_show = has_runs_to_show or _found_runs_to_show(call.name, result)
                 messages.append(
                     LLMMessage(
                         role="tool",
@@ -149,19 +141,16 @@ async def answer_events(
                         content=json.dumps(result, ensure_ascii=False),
                     )
                 )
-            if held_answer:
-                yield DoneEvent(message=held_answer, actions=context.actions)
-                return
     except LLMRateLimitError:
         logger.warning("LLM quota exceeded")
-        yield DoneEvent(message=held_answer or _RATE_LIMIT_MESSAGE, actions=context.actions)
+        yield DoneEvent(message=_RATE_LIMIT_MESSAGE, actions=context.final_actions)
         return
     except LLMError:
         logger.exception("LLM call failed")
-        yield DoneEvent(message=held_answer or _LLM_ERROR_MESSAGE)
+        yield DoneEvent(message=_LLM_ERROR_MESSAGE)
         return
 
-    yield DoneEvent(message=held_answer or _TOO_MANY_ROUNDS_MESSAGE, actions=context.actions)
+    yield DoneEvent(message=_TOO_MANY_ROUNDS_MESSAGE, actions=context.final_actions)
 
 
 async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> ChatResponse:

@@ -2,7 +2,14 @@ from typing import Literal
 
 from pydantic import Field
 
-from app.schemas.base import InputSchema, NonNegativeFloat, ORMSchema, Probability, UTCDateTime
+from app.schemas.base import (
+    SQLITE_INT_MAX,
+    InputSchema,
+    NonNegativeFloat,
+    ORMSchema,
+    Probability,
+    UTCDateTime,
+)
 
 RankingMetric = Literal["accuracy", "loss", "val_accuracy", "val_loss"]
 """Per-epoch metrics that runs can be ranked by."""
@@ -11,7 +18,7 @@ RankingMetric = Literal["accuracy", "loss", "val_accuracy", "val_loss"]
 class MetricCreate(InputSchema):
     """Metrics logged for one epoch: `POST /api/runs/{id}/metrics`."""
 
-    epoch: int = Field(ge=1, examples=[1])
+    epoch: int = Field(ge=1, le=SQLITE_INT_MAX, examples=[1])
     accuracy: Probability = Field(examples=[0.9567])
     loss: NonNegativeFloat = Field(examples=[0.145])
     val_accuracy: Probability | None = Field(default=None, examples=[0.9412])

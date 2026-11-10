@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Annotated
 from pydantic import AfterValidator, Field, JsonValue, model_validator
 
 from app.models.run import RunStatus
-from app.schemas.base import InputSchema, ORMSchema, UTCDateTime
+from app.schemas.base import DatabaseId, InputSchema, ORMSchema, UTCDateTime
 from app.schemas.metric import MetricRead
 
 if TYPE_CHECKING:
@@ -41,7 +41,7 @@ Hyperparams = Annotated[dict[str, JsonValue], AfterValidator(_validate_hyperpara
 class RunCreate(InputSchema):
     """`POST /api/runs`."""
 
-    experiment_id: int = Field(ge=1)
+    experiment_id: DatabaseId
     run_name: str = Field(min_length=1, max_length=255, examples=["run-001"])
     hyperparams: Hyperparams = Field(
         default_factory=dict,
