@@ -1,7 +1,10 @@
 """LLM access behind one interface. A real provider plugs in at `get_llm_client`."""
 
 import json
+import re
 import unicodedata
+from collections.abc import AsyncIterator, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Literal, Protocol
@@ -59,6 +62,12 @@ class LLMClient(Protocol):
         self, system: str, messages: list[LLMMessage], tools: list[ToolDefinition]
     ) -> LLMReply: ...
 
+    def stream(
+        self, system: str, messages: list[LLMMessage], tools: list[ToolDefinition]
+    ) -> AsyncIterator[str | LLMReply]:
+        """Yield text as it is written, then the complete reply as the last item."""
+        ...
+
 
 _BEST_RUN_PHRASES = ("tốt nhất", "cao nhất", "thấp nhất", "best")
 _FAKE_PREFIX = "[LLM giả lập]"
@@ -106,6 +115,14 @@ class FakeLLMClient:
             )
         )
 
+    async def stream(
+        self, system: str, messages: list[LLMMessage], tools: list[ToolDefinition]
+    ) -> AsyncIterator[str | LLMReply]:
+        reply = await self.complete(system, messages, tools)
+        for word in re.findall(r"\S+\s*", reply.text or ""):
+            yield word
+        yield reply
+
 
 def _to_gemini_contents(messages: list[LLMMessage]) -> list[types.Content]:
     contents: list[types.Content] = []
@@ -135,8 +152,11 @@ def _to_gemini_contents(messages: list[LLMMessage]) -> list[types.Content]:
     return contents
 
 
-def _from_gemini_response(response: types.GenerateContentResponse) -> LLMReply:
-    content = response.candidates[0].content if response.candidates else None
+def _first_candidate_content(response: types.GenerateContentResponse) -> types.Content | None:
+    return response.candidates[0].content if response.candidates else None
+
+
+def _reply_from_content(content: types.Content | None) -> LLMReply:
     parts = (content.parts if content else None) or []
     return LLMReply(
         text="".join(p.text for p in parts if p.text and not p.thought) or None,
@@ -153,14 +173,25 @@ def _from_gemini_response(response: types.GenerateContentResponse) -> LLMReply:
     )
 
 
+@contextmanager
+def _provider_errors() -> Iterator[None]:
+    """Turn every SDK failure into the errors the copilot engine handles."""
+    try:
+        yield
+    except errors.APIError as exc:
+        if exc.code == 429:
+            raise LLMRateLimitError("Gemini quota exceeded") from exc
+        raise LLMError(f"Gemini API error {exc.code}") from exc
+    except Exception as exc:  # network and timeout errors from the SDK's HTTP library
+        raise LLMError(f"Gemini request failed: {type(exc).__name__}") from exc
+
+
 class GeminiLLMClient:
     def __init__(self, client: genai.Client, model: str) -> None:
         self._client = client
         self._model = model
 
-    async def complete(
-        self, system: str, messages: list[LLMMessage], tools: list[ToolDefinition]
-    ) -> LLMReply:
+    def _config(self, system: str, tools: list[ToolDefinition]) -> types.GenerateContentConfig:
         declarations = [
             types.FunctionDeclaration(
                 name=tool.name,
@@ -169,23 +200,41 @@ class GeminiLLMClient:
             )
             for tool in tools
         ]
-        try:
+        return types.GenerateContentConfig(
+            system_instruction=system,
+            tools=[types.Tool(function_declarations=declarations)],
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        )
+
+    async def complete(
+        self, system: str, messages: list[LLMMessage], tools: list[ToolDefinition]
+    ) -> LLMReply:
+        with _provider_errors():
             response = await self._client.aio.models.generate_content(
                 model=self._model,
                 contents=_to_gemini_contents(messages),
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    tools=[types.Tool(function_declarations=declarations)],
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                ),
+                config=self._config(system, tools),
             )
-        except errors.APIError as exc:
-            if exc.code == 429:
-                raise LLMRateLimitError("Gemini quota exceeded") from exc
-            raise LLMError(f"Gemini API error {exc.code}") from exc
-        except Exception as exc:  # network and timeout errors from the SDK's HTTP library
-            raise LLMError(f"Gemini request failed: {type(exc).__name__}") from exc
-        return _from_gemini_response(response)
+        return _reply_from_content(_first_candidate_content(response))
+
+    async def stream(
+        self, system: str, messages: list[LLMMessage], tools: list[ToolDefinition]
+    ) -> AsyncIterator[str | LLMReply]:
+        parts: list[types.Part] = []
+        with _provider_errors():
+            chunks = await self._client.aio.models.generate_content_stream(
+                model=self._model,
+                contents=_to_gemini_contents(messages),
+                config=self._config(system, tools),
+            )
+            async for chunk in chunks:
+                content = _first_candidate_content(chunk)
+                for part in (content.parts if content else None) or []:
+                    parts.append(part)
+                    if part.text and not part.thought:
+                        yield part.text
+        # Every part is kept: thought signatures must go back to the model unchanged.
+        yield _reply_from_content(types.Content(role="model", parts=parts))
 
 
 @lru_cache

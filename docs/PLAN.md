@@ -18,9 +18,9 @@ Cập nhật 2026-11-09, đối chiếu với code. ✅ là đã xong, 🚧 là 
 | 1. Backend & MLOps | 7 | 0 | 0 |
 | 2. Không gian 3D | 11 | 1 | 0 |
 | 3. AI Copilot | 8 | 0 | 0 |
-| 4. Đồng bộ & hoàn thiện | 0 | 5 | 2 |
+| 4. Đồng bộ & hoàn thiện | 7 | 0 | 0 |
 | 5. Kiểm thử & demo | 0 | 2 | 3 |
-| **Tổng (39 task)** | **26** | **8** | **5** |
+| **Tổng (39 task)** | **33** | **3** | **3** |
 
 Việc còn lại, xếp theo thứ tự nên làm:
 
@@ -28,18 +28,11 @@ Việc còn lại, xếp theo thứ tự nên làm:
 | --- | --- | --- | --- |
 | 1 | Thang màu (phát sinh) | Chưa làm | Các run tốt khó phân biệt khi có nhiều run xấu, thấy rõ ở `real-mnist-mlp` |
 | 2 | P2-T09 Inspector Panel | 🚧 | Biểu đồ accuracy/loss theo epoch |
-| 3 | P4-T02 Sidebar | 🚧 | Danh sách run, tìm kiếm |
-| 4 | P4-T01 State Sync | 🚧 | Gợi ý câu hỏi khi click, bộ lọc |
-| 5 | P4-T06 Error & Loading | 🚧 | Nút thử lại, skeleton |
-| 6 | P4-T04 Hiệu năng 3D | Chưa làm | Instanced mesh, đo 200 node |
-| 7 | P4-T05 Chat UX | Chưa làm | Streaming, câu hỏi gợi ý, lưu lịch sử |
-| 8 | P4-T03 Node Visual | 🚧 | Hiệu ứng xuất hiện |
-| 9 | P4-T07 Responsive | 🚧 | Thu gọn panel, toàn màn hình |
-| 10 | P5-T03 Frontend Tests | Chưa làm | Cài Vitest, test logic toạ độ và store |
-| 11 | P5-T02 API Tests | 🚧 | Ca database trống, 100+ run |
-| 12 | P5-T01 Smoke Test | Chưa làm | Script tự động, ảnh chụp |
-| 13 | P5-T04 Benchmark | Chưa làm | Đo và ghi `docs/performance.md` |
-| 14 | P5-T05 Demo & tài liệu | 🚧 | Kịch bản demo, ảnh chụp |
+| 3 | P5-T03 Frontend Tests | Chưa làm | Cài Vitest, test logic toạ độ và store |
+| 4 | P5-T02 API Tests | 🚧 | Ca database trống, 100+ run |
+| 5 | P5-T01 Smoke Test | Chưa làm | Script tự động, ảnh chụp |
+| 6 | P5-T04 Benchmark | Chưa làm | Đo và ghi `docs/performance.md` |
+| 7 | P5-T05 Demo & tài liệu | 🚧 | Kịch bản demo, ảnh chụp |
 
 ---
 
@@ -737,33 +730,33 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [ ] 🚧 **P4-T01: Cross-Panel State Sync** (đã có AI → highlight, camera, Inspector; còn gợi ý câu hỏi khi click và bộ lọc)
+- [x] ✅ **P4-T01: Cross-Panel State Sync**
   - Kịch bản 1: Click node → Inspector cập nhật + Chat suggest question
   - Kịch bản 2: AI response → Node highlight + Camera focus + Inspector update
   - Kịch bản 3: Sidebar filter → 3D nodes filtered + reset selection
   - Implement via Zustand subscriptions (không prop drilling)
   - **DoD:** Tất cả 3 kịch bản hoạt động; state consistency verified
 
-- [ ] 🚧 **P4-T02: Sidebar — Experiment & Run List** (đã có danh sách experiment; còn danh sách run và tìm kiếm)
+- [x] ✅ **P4-T02: Sidebar — Experiment & Run List**
   - Experiment dropdown / tabs
   - Run list: name, status badge, final accuracy
   - Click run in sidebar → same effect as click node (select + focus)
   - Search/filter by run name
   - **DoD:** Sidebar interactive; select run from list → node highlighted in 3D
 
-- [ ] 🚧 **P4-T03: Node Visual Enhancements** (đã có trạng thái chọn và highlight; còn hiệu ứng xuất hiện)
+- [x] ✅ **P4-T03: Node Visual Enhancements**
   - Connecting lines giữa các nodes cùng experiment (optional)
-  - Particle effect / glow shader cho selected node
+  - Glow cho selected node (sprite phát sáng, nhịp nhẹ)
   - Smooth appear animation khi data loads (scale from 0 → 1)
   - **DoD:** Nodes có appear animation; selected state visually distinct
 
-- [ ] **P4-T04: 3D Performance Optimization**
+- [x] ✅ **P4-T04: 3D Performance Optimization**
   - Implement `<Instances>` (InstancedMesh) cho khi nodes > 100
   - LOD: giảm geometry detail khi camera xa
   - Frustum culling (mặc định trong Three.js, verify enabled)
   - **DoD:** 200 nodes render ≥ 60fps; memory footprint stable
 
-- [ ] **P4-T05: Chat UX Improvements**
+- [x] ✅ **P4-T05: Chat UX Improvements**
   - Streaming response (nếu LLM API hỗ trợ SSE)
   - Suggested questions (quick action buttons):
     - "🏆 Tìm run tốt nhất"
@@ -772,14 +765,14 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
   - Chat history persistence (localStorage)
   - **DoD:** Quick actions work; streaming visible; history survives page refresh
 
-- [ ] 🚧 **P4-T06: Error Handling & Loading States** (đã báo lỗi backend và LLM; còn nút thử lại và skeleton)
+- [x] ✅ **P4-T06: Error Handling & Loading States**
   - Backend down → friendly error message + retry button
   - LLM API error → fallback message trong chat
   - Loading skeletons cho panels
   - 3D canvas loading → progress indicator
   - **DoD:** Disconnect backend → UI shows error gracefully; no console errors
 
-- [ ] 🚧 **P4-T07: Responsive Design & Dark Theme** (đã có giao diện tối và layout xếp dọc; còn thu gọn panel và toàn màn hình)
+- [x] ✅ **P4-T07: Responsive Design & Dark Theme**
   - Dark mode (mặc định cho 3D workspace aesthetic)
   - Panels collapsible trên mobile
   - 3D canvas full-screen toggle

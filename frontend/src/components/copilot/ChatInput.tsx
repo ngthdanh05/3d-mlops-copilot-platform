@@ -3,7 +3,7 @@ import { sendCopilotMessage } from '../../hooks/useCopilot'
 import { useChatStore } from '../../store/useChatStore'
 
 export function ChatInput() {
-  const isLoading = useChatStore((state) => state.isLoading)
+  const isLoading = useChatStore((state) => state.streamingMessageId !== null)
   const [draft, setDraft] = useState('')
 
   const handleSubmit = (event: FormEvent) => {

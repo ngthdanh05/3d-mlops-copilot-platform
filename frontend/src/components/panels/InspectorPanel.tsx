@@ -1,12 +1,8 @@
-import type { RunStatus, RunSummary } from '../../lib/types'
+import type { RunSummary } from '../../lib/types'
 import { useRunStore } from '../../store/useRunStore'
+import { RUN_STATUS } from '../../utils/run-status'
+import { SkeletonRows } from '../layout/SkeletonRows'
 import { HyperparamsTable } from './HyperparamsTable'
-
-const STATUS_LABELS: Record<RunStatus, string> = {
-  completed: '● Hoàn thành',
-  running: '◐ Đang chạy',
-  failed: '✕ Lỗi',
-}
 
 function finalMetrics(run: RunSummary): [string, number | null][] {
   return [
@@ -23,7 +19,7 @@ function RunDetails({ run }: { run: RunSummary }) {
       <div>
         <p className="font-medium text-slate-100">{run.run_name}</p>
         <p className="mt-1 text-xs text-slate-400">
-          {STATUS_LABELS[run.status]} · {new Date(run.created_at).toLocaleString('vi-VN')}
+          {RUN_STATUS[run.status].symbol} {RUN_STATUS[run.status].label} · {new Date(run.created_at).toLocaleString('vi-VN')}
         </p>
       </div>
       <div>
@@ -47,16 +43,18 @@ function RunDetails({ run }: { run: RunSummary }) {
   )
 }
 
-export function InspectorPanel() {
+export function InspectorPanel({ isLoading }: { isLoading: boolean }) {
   const selectedRun = useRunStore((state) =>
     state.runs.find((run) => run.id === state.selectedRunId),
   )
 
   return (
     <section aria-label="Chi tiết run" className="min-h-48 flex-1 overflow-y-auto p-4">
-      <h2 className="text-xs font-medium uppercase text-slate-400">Chi tiết run</h2>
+      <h2 className="hidden text-xs font-medium uppercase text-slate-400 lg:block">Chi tiết run</h2>
       {selectedRun ? (
         <RunDetails run={selectedRun} />
+      ) : isLoading ? (
+        <SkeletonRows count={4} className="mt-3 space-y-2" />
       ) : (
         <p className="mt-3 text-sm text-slate-500">Chọn một quả cầu để xem chi tiết.</p>
       )}

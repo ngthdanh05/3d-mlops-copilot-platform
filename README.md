@@ -359,6 +359,7 @@ Tất cả endpoint có tiền tố `/api`. Tài liệu đầy đủ, có thể 
 | `DELETE` | `/api/runs/{id}` | Xoá run cùng metrics của nó | 204 · 404 |
 | `POST` | `/api/runs/{id}/metrics` | Ghi metrics cho 1 epoch | 201 · 404 · 409 epoch đã ghi |
 | `POST` | `/api/copilot/chat` | Hỏi trợ lý AI, trả về `message` + `actions` | 200 · 422 |
+| `POST` | `/api/copilot/chat/stream` | Như trên nhưng stream câu trả lời bằng SSE: các sự kiện `delta`, `reset`, rồi `done` chứa `message` + `actions` | 200 · 422 |
 
 Dữ liệu gửi lên sai định dạng luôn trả về **422**, kèm thông báo chỉ rõ field nào sai.
 

@@ -1,18 +1,26 @@
-"""The tool-calling loop behind `POST /api/copilot/chat`."""
+"""The tool-calling loop behind `POST /api/copilot/chat` and its streaming variant."""
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.copilot import ChatRequest, ChatResponse
+from app.schemas.copilot import (
+    ChatRequest,
+    ChatResponse,
+    DoneEvent,
+    TextDeltaEvent,
+    TextResetEvent,
+)
 from app.services.copilot.llm_client import (
     LLMClient,
     LLMError,
     LLMMessage,
     LLMRateLimitError,
+    LLMReply,
     ToolCall,
     ToolDefinition,
 )
@@ -68,7 +76,13 @@ async def _run_tool(call: ToolCall, context: ToolContext) -> dict[str, Any]:
         return {"error": exc.detail}
 
 
-async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> ChatResponse:
+ChatEvent = TextDeltaEvent | TextResetEvent | DoneEvent
+
+
+async def answer_events(
+    db: AsyncSession, llm: LLMClient, request: ChatRequest, *, stream_text: bool = True
+) -> AsyncIterator[ChatEvent]:
+    """Run the loop, yielding answer text as it arrives. Always ends with one `DoneEvent`."""
     context = ToolContext(db=db, experiment_id=request.experiment_id)
     messages = [LLMMessage(role="user", content=request.message)]
     nudged = False
@@ -78,10 +92,20 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
 
     try:
         for _ in range(MAX_TOOL_ROUNDS):
-            reply = await llm.complete(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS)
+            reply = LLMReply()
+            if stream_text:
+                async for item in llm.stream(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS):
+                    if isinstance(item, LLMReply):
+                        reply = item
+                    elif held_answer is None:
+                        yield TextDeltaEvent(text=item)
+            else:
+                reply = await llm.complete(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS)
+
             if not reply.tool_calls:
                 if held_answer:
-                    return ChatResponse(message=held_answer, actions=context.actions)
+                    yield DoneEvent(message=held_answer, actions=context.actions)
+                    return
                 if reply.text and has_runs_to_show and not context.actions:
                     held_answer = reply.text
                     messages.append(
@@ -94,14 +118,18 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
                     messages.append(LLMMessage(role="user", content=_SHOW_RUNS_PROMPT))
                     continue
                 if reply.text or nudged:
-                    return ChatResponse(
+                    yield DoneEvent(
                         message=reply.text or _EMPTY_REPLY_MESSAGE, actions=context.actions
                     )
+                    return
                 # Models sometimes stop silently after their last tool call.
                 nudged = True
                 messages.append(LLMMessage(role="user", content=_ANSWER_NOW_PROMPT))
                 continue
 
+            # Text written alongside tool calls is thinking aloud, not the answer.
+            if reply.text and held_answer is None:
+                yield TextResetEvent()
             messages.append(
                 LLMMessage(
                     role="assistant",
@@ -122,12 +150,22 @@ async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> Chat
                     )
                 )
             if held_answer:
-                return ChatResponse(message=held_answer, actions=context.actions)
+                yield DoneEvent(message=held_answer, actions=context.actions)
+                return
     except LLMRateLimitError:
         logger.warning("LLM quota exceeded")
-        return ChatResponse(message=held_answer or _RATE_LIMIT_MESSAGE, actions=context.actions)
+        yield DoneEvent(message=held_answer or _RATE_LIMIT_MESSAGE, actions=context.actions)
+        return
     except LLMError:
         logger.exception("LLM call failed")
-        return ChatResponse(message=held_answer or _LLM_ERROR_MESSAGE)
+        yield DoneEvent(message=held_answer or _LLM_ERROR_MESSAGE)
+        return
 
-    return ChatResponse(message=held_answer or _TOO_MANY_ROUNDS_MESSAGE, actions=context.actions)
+    yield DoneEvent(message=held_answer or _TOO_MANY_ROUNDS_MESSAGE, actions=context.actions)
+
+
+async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> ChatResponse:
+    async for event in answer_events(db, llm, request, stream_text=False):
+        if isinstance(event, DoneEvent):
+            return ChatResponse(message=event.message, actions=event.actions)
+    raise RuntimeError("The copilot loop ended without an answer")

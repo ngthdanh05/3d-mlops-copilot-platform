@@ -1,27 +1,24 @@
-import { Billboard, Html, Line, useCursor } from '@react-three/drei'
+import { Billboard, useCursor } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { memo, useRef, useState } from 'react'
 import { Vector3, type Group } from 'three'
-import type { JsonValue, RunStatus, RunSummary } from '../../lib/types'
-import { useCameraStore } from '../../store/useCameraStore'
+import type { RunStatus } from '../../lib/types'
+import { focusRun } from '../../store/syncStores'
 import { useRunStore } from '../../store/useRunStore'
-import { colorMetric } from '../../utils/color-utils'
 import {
-  axisValue,
-  formatNumber,
-  SCENE_SIZE,
-  type RunNodeLayout,
-} from '../../utils/coordinate-mapper'
+  APPEAR_DURATION,
+  APPEAR_MAX_STEP,
+  appearScale,
+  ARRIVAL_THRESHOLD,
+  CLICK_DRAG_TOLERANCE,
+  DIMMED_OPACITY,
+  MIN_HIT_RADIUS,
+  MOVE_SPEED,
+  OFF_GRID_OPACITY,
+  type RunVisual,
+} from './node-style'
+import { RunDecorations } from './RunDecorations'
 
-/** Keeps small spheres easy to hit with the pointer. */
-const MIN_HIT_RADIUS = 0.35
-/** Pointer travel (px) above which a press counts as orbiting, not a click. */
-const CLICK_DRAG_TOLERANCE = 4
-const DIMMED_OPACITY = 0.18
-const OFF_GRID_OPACITY = 0.3
-const GUIDE_COLOR = '#94a3b8'
-const MOVE_SPEED = 6
-const ARRIVAL_THRESHOLD = 0.005
 const moveTarget = new Vector3()
 
 function StatusMark({ status, radius }: { status: RunStatus; radius: number }) {
@@ -50,61 +47,8 @@ function StatusMark({ status, radius }: { status: RunStatus; radius: number }) {
   return null
 }
 
-/** Drops from the sphere to the floor, then runs to the X and Z axes to read its position. */
-function GuideLines({ position }: { position: RunNodeLayout['position'] }) {
-  const [x, y, z] = position
-  const floor: [number, number, number] = [0, -y, 0]
-  const lines: [number, number, number][] = [
-    [0, 0, 0],
-    [0, -y, SCENE_SIZE - z],
-    [SCENE_SIZE - x, -y, 0],
-  ]
-  return (
-    <>
-      {lines.map((end) => (
-        <Line
-          key={end.join()}
-          points={[end, floor]}
-          color={GUIDE_COLOR}
-          lineWidth={1}
-          dashed
-          dashSize={0.2}
-          gapSize={0.12}
-        />
-      ))}
-    </>
-  )
-}
-
-function formatAxisValue(value: JsonValue | undefined): string {
-  if (typeof value === 'number') return formatNumber(value)
-  return value === undefined || value === null ? 'không có' : String(value)
-}
-
-function RunCallout({ run, axisKeys }: { run: RunSummary; axisKeys: string[] }) {
-  const accuracy = colorMetric(run)
-  return (
-    <div className="whitespace-nowrap rounded bg-slate-800/95 px-2.5 py-1.5 text-xs text-slate-300 shadow">
-      <div className="font-medium text-white">{run.run_name}</div>
-      {accuracy !== null && (
-        <div>
-          {run.final_val_accuracy !== null ? 'val_accuracy' : 'accuracy'}: {accuracy.toFixed(4)}
-        </div>
-      )}
-      {axisKeys.map((key) => (
-        <div key={key} className="text-slate-400">
-          {key}: {formatAxisValue(axisValue(run, key))}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-interface RunNodeProps {
-  node: RunNodeLayout
+interface RunNodeProps extends RunVisual {
   axisKeys: string[]
-  color: string
-  radius: number
 }
 
 export const RunNode = memo(function RunNode({ node, axisKeys, color, radius }: RunNodeProps) {
@@ -117,17 +61,21 @@ export const RunNode = memo(function RunNode({ node, axisKeys, color, radius }: 
       !state.highlightedRunIds.includes(run.id) &&
       state.selectedRunId !== run.id,
   )
-  const selectRun = useRunStore((state) => state.selectRun)
-  const setCameraTarget = useCameraStore((state) => state.setTarget)
   const [isHovered, setHovered] = useState(false)
   useCursor(isHovered)
 
   // The prop stays fixed so three.js does not jump; the frame loop glides to each new position.
   const groupRef = useRef<Group>(null)
   const [initialPosition] = useState(position)
+  const appearElapsed = useRef(0)
   useFrame((_, delta) => {
     const group = groupRef.current
     if (!group) return
+    if (appearElapsed.current < APPEAR_DURATION) {
+      const step = Math.min(delta, APPEAR_MAX_STEP)
+      appearElapsed.current = Math.min(appearElapsed.current + step, APPEAR_DURATION)
+      group.scale.setScalar(appearScale(appearElapsed.current))
+    }
     moveTarget.set(...position)
     if (group.position.equals(moveTarget)) return
     group.position.lerp(moveTarget, 1 - Math.exp(-MOVE_SPEED * delta))
@@ -137,15 +85,13 @@ export const RunNode = memo(function RunNode({ node, axisKeys, color, radius }: 
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation()
     if (event.delta > CLICK_DRAG_TOLERANCE) return
-    selectRun(run.id)
-    setCameraTarget(run.id)
+    focusRun(run.id)
   }
 
-  const isActive = isHovered || isSelected || isHighlighted
   const opacity = isOffGrid ? OFF_GRID_OPACITY : isDimmed && !isHovered ? DIMMED_OPACITY : 1
 
   return (
-    <group ref={groupRef} position={initialPosition}>
+    <group ref={groupRef} position={initialPosition} scale={0}>
       <mesh>
         <sphereGeometry args={[radius, 24, 24]} />
         <meshStandardMaterial
@@ -169,32 +115,15 @@ export const RunNode = memo(function RunNode({ node, axisKeys, color, radius }: 
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
       {!isDimmed && <StatusMark status={run.status} radius={radius} />}
-      {isSelected && (
-        <Billboard>
-          <mesh>
-            <ringGeometry args={[radius + 0.14, radius + 0.21, 40]} />
-            <meshBasicMaterial color="#ffffff" />
-          </mesh>
-        </Billboard>
-      )}
-      {isHighlighted && (
-        <Billboard>
-          <mesh>
-            <ringGeometry args={[radius + 0.27, radius + 0.36, 40]} />
-            <meshBasicMaterial color="#fb923c" />
-          </mesh>
-        </Billboard>
-      )}
-      {isActive && !isOffGrid && <GuideLines position={position} />}
-      {isActive && (
-        <Html
-          position={[radius + 0.5, radius + 0.5, 0]}
-          zIndexRange={[50, 40]}
-          style={{ pointerEvents: 'none' }}
-        >
-          <RunCallout run={run} axisKeys={axisKeys} />
-        </Html>
-      )}
+      <RunDecorations
+        node={node}
+        axisKeys={axisKeys}
+        color={color}
+        radius={radius}
+        isSelected={isSelected}
+        isHighlighted={isHighlighted}
+        isHovered={isHovered}
+      />
     </group>
   )
 })
