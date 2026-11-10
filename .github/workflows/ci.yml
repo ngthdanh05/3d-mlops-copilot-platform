@@ -48,7 +48,7 @@ jobs:
         run: uv run pytest --cov --cov-report=term-missing
 
   # ------------------------------------------------------------------
-  # 2. Frontend: lint, typecheck, build
+  # 2. Frontend: lint, typecheck, test, build
   #    Tự bỏ qua cho đến khi frontend/package.json tồn tại (Phase 2).
   # ------------------------------------------------------------------
   frontend:
@@ -98,6 +98,10 @@ jobs:
       - name: Typecheck
         if: steps.detect.outputs.exists == 'true'
         run: pnpm run --if-present typecheck
+
+      - name: Test + coverage
+        if: steps.detect.outputs.exists == 'true'
+        run: pnpm run test:coverage
 
       - name: Build
         if: steps.detect.outputs.exists == 'true'

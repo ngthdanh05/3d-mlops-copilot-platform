@@ -2,7 +2,7 @@
 
 > **Nền tảng quản lý thực nghiệm học máy trong không gian 3D tích hợp trợ lý AI**
 >
-> Version: `1.1.0-draft` · Created: 2026-11-06 · Updated: 2026-11-08 · Author: Principal System Architect
+> Version: `1.1.0-draft` · Created: 2026-11-06 · Updated: 2026-11-10 · Author: Principal System Architect
 >
 > Bản 1.1 thống nhất với README: không gian 3D theo siêu tham số và trợ lý AI dùng tool calling.
 > Quy ước phát triển nằm ở `CONTRIBUTING.md`.
@@ -11,7 +11,7 @@
 
 ## Tiến độ hiện tại
 
-Cập nhật 2026-11-09, đối chiếu với code. ✅ là đã xong, 🚧 là làm một phần, ô trống là chưa làm.
+Cập nhật 2026-11-10, đối chiếu với code. ✅ là đã xong, 🚧 là làm một phần, ô trống là chưa làm.
 
 | Phase | ✅ Xong | 🚧 Một phần | Chưa làm |
 | --- | --- | --- | --- |
@@ -19,8 +19,8 @@ Cập nhật 2026-11-09, đối chiếu với code. ✅ là đã xong, 🚧 là 
 | 2. Không gian 3D | 11 | 1 | 0 |
 | 3. AI Copilot | 8 | 0 | 0 |
 | 4. Đồng bộ & hoàn thiện | 7 | 0 | 0 |
-| 5. Kiểm thử & demo | 0 | 2 | 3 |
-| **Tổng (39 task)** | **33** | **3** | **3** |
+| 5. Kiểm thử & demo | 4 | 1 | 0 |
+| **Tổng (39 task)** | **37** | **2** | **0** |
 
 Việc còn lại, xếp theo thứ tự nên làm:
 
@@ -28,11 +28,7 @@ Việc còn lại, xếp theo thứ tự nên làm:
 | --- | --- | --- | --- |
 | 1 | Thang màu (phát sinh) | Chưa làm | Các run tốt khó phân biệt khi có nhiều run xấu, thấy rõ ở `real-mnist-mlp` |
 | 2 | P2-T09 Inspector Panel | 🚧 | Biểu đồ accuracy/loss theo epoch |
-| 3 | P5-T03 Frontend Tests | Chưa làm | Cài Vitest, test logic toạ độ và store |
-| 4 | P5-T02 API Tests | 🚧 | Ca database trống, 100+ run |
-| 5 | P5-T01 Smoke Test | Chưa làm | Script tự động, ảnh chụp |
-| 6 | P5-T04 Benchmark | Chưa làm | Đo và ghi `docs/performance.md` |
-| 7 | P5-T05 Demo & tài liệu | 🚧 | Kịch bản demo, ảnh chụp |
+| 3 | P5-T04 Benchmark | 🚧 | AI e2e phải < 8 s. Đã bớt vòng gọi LLM; lần đo chính thức trung vị 7,63 s, chậm nhất 11,31 s do Gemini chậm |
 
 ---
 
@@ -786,7 +782,7 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
 
 #### Tasks
 
-- [ ] **P5-T01: End-to-End Smoke Test**
+- [x] ✅ **P5-T01: End-to-End Smoke Test** (`backend/scripts/smoke_test.py`, ảnh ở `docs/screenshots/`)
   - Script tự động:
     1. Start backend (`uvicorn`)
     2. Seed database (hoặc run `train_mnist_demo.py`)
@@ -796,26 +792,26 @@ Foundation       3D Scene         AI Copilot       Sync & Polish   Testing
     6. Manual: chat "run nào tốt nhất?" → AI responds + node highlights
   - **DoD:** Full flow passes without errors; documented with screenshots
 
-- [ ] 🚧 **P5-T02: API Integration Tests** (đã phủ mọi endpoint; còn ca database trống và 100+ run)
+- [x] ✅ **P5-T02: API Integration Tests** (`backend/tests/test_edge_cases.py`)
   - Test full CRUD cycle: create experiment → create run → log metrics → query
   - Test copilot endpoint with various intents
   - Test edge cases: empty DB, 100+ runs, malformed requests
   - **DoD:** `pytest` suite passes; covers all endpoints
 
-- [ ] **P5-T03: Frontend Component Tests**
+- [x] ✅ **P5-T03: Frontend Component Tests**
   - Test `coordinate-mapper.ts`: edge cases (0 accuracy, max loss)
   - Test Zustand stores: state transitions
   - Test action handler: mock AI response → verify store updates
   - **DoD:** `pnpm test` passes; ≥ 70% util coverage
 
-- [ ] **P5-T04: Performance Benchmark**
+- [ ] 🚧 **P5-T04: Performance Benchmark** (đã đo, FPS và API đạt. AI đã giảm còn 2 vòng gọi LLM mỗi câu: 1,9–3,6 s khi Gemini tải thấp, nhưng 6–11 s khi Gemini chậm, nên chưa đảm bảo < 8 s. Xem `docs/performance.md`)
   - Measure: 3D FPS with 50, 100, 200, 500 nodes
   - Measure: API response time (p50, p95)
   - Measure: AI response time (end-to-end)
   - Document results in `docs/performance.md`
   - **DoD:** 200 nodes @ 60fps; API p95 < 200ms; AI e2e < 8s
 
-- [ ] 🚧 **P5-T05: Demo Script & Documentation** (đã có hướng dẫn cài đặt; còn kịch bản demo và ảnh chụp)
+- [x] ✅ **P5-T05: Demo Script & Documentation** (`docs/DEMO.md`)
   - Viết `README.md`: setup instructions, prerequisites, run commands
   - Tạo demo script / walkthrough cho stakeholders
   - Screenshots / screen recording of key flows

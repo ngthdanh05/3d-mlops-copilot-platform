@@ -27,6 +27,7 @@
 - [Ghi log từ script huấn luyện của bạn](#ghi-log-từ-script-huấn-luyện-của-bạn)
 - [Cấu hình](#cấu-hình)
 - [Kiểm thử](#kiểm-thử)
+- [Demo](#demo)
 - [Lộ trình phát triển](#lộ-trình-phát-triển)
 - [Giới hạn của bản PoC](#giới-hạn-của-bản-poc)
 - [Quy ước phát triển](#quy-ước-phát-triển)
@@ -48,7 +49,7 @@ Khi huấn luyện mô hình học máy, ta thường chạy **rất nhiều l�
 Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đồng bộ trạng thái** với nhau.
 
 > [!NOTE]
-> Đây là bản **Proof of Concept (PoC)**, chạy trên máy cá nhân (localhost), một người dùng. Hiện backend tracking, không gian 3D và luồng AI tìm run tốt nhất đã chạy được; các công cụ phân tích còn lại của AI đang được phát triển. Xem [Lộ trình](#lộ-trình-phát-triển).
+> Đây là bản **Proof of Concept (PoC)**, chạy trên máy cá nhân (localhost), một người dùng. Luồng đầy đủ từ huấn luyện, ghi log, xem 3D đến hỏi AI đã chạy được. Xem [Lộ trình](#lộ-trình-phát-triển).
 
 ---
 
@@ -56,27 +57,24 @@ Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đ�
 
 ### ✅ Đã có
 
-- Không gian 3D tương tác: xoay, zoom, click, hover, camera bay tới run, câu kết luận tính từ dữ liệu, Inspector Panel.
-- Trợ lý AI dùng Gemini: tìm run tốt nhất, giải thích so với trung vị, làm nổi bật và bay camera tới run đó.
+- Không gian 3D tương tác: xoay, zoom, click, hover, camera bay tới run, chọn trục, câu kết luận tính từ dữ liệu, Inspector Panel, instanced mesh khi có trên 100 run.
+- Trợ lý AI dùng Gemini: tìm run tốt nhất, so sánh run, chẩn đoán overfitting, làm nổi bật và bay camera tới các run liên quan. Câu trả lời hiện dần theo luồng và lịch sử chat được giữ lại.
+- Sidebar lọc run theo trạng thái, accuracy và tên. Ba khung luôn đồng bộ.
 
-- REST API để tạo **experiment**, **run** và ghi **metrics theo từng epoch**.
+- REST API để tạo, xem, xoá **experiment**, **run** và ghi **metrics theo từng epoch**.
 - Kiểm tra dữ liệu chặt chẽ: `learning_rate > 0`, `0 ≤ accuracy ≤ 1`, `loss ≥ 0`, `epoch ≥ 1`, không nhận NaN/vô cực, không nhận field lạ.
 - Danh sách run kèm **chỉ số của epoch cuối** (`final_accuracy`, `final_loss`, ...), sẵn sàng để vẽ lên không gian 3D.
 - Mã lỗi HTTP rõ ràng: `201` tạo mới · `404` không tìm thấy · `409` trùng lặp · `422` dữ liệu sai.
 - **Script huấn luyện demo** (scikit-learn) tự ghi log lên API.
 - **Công cụ sinh dữ liệu giả lập** với đường cong học tập thực tế (có run tốt, run overfit, run lỗi, run đang chạy).
 - Swagger UI tự động tại `/docs`.
-- 113 bài kiểm thử backend. CI tự chạy test và lint cho mỗi Pull Request.
+- Kiểm thử tự động cho backend và frontend, smoke test end-to-end trên trình duyệt thật, [số đo hiệu năng](docs/performance.md). CI tự chạy test và lint cho mỗi Pull Request.
 
 ### 🚧 Sắp có
 
 | Tính năng | Phase | Ưu tiên |
 |---|---|---|
-| Chọn trục 3D từ danh sách siêu tham số / metrics | 2 | Must |
 | Inspector Panel: biểu đồ accuracy/loss theo epoch | 2 | Must |
-| AI Copilot: so sánh 2 run, chẩn đoán overfitting | 3 | Must |
-| AI tóm tắt experiment, gợi ý siêu tham số | 3 | Should |
-| Endpoint xoá experiment / run | 2 | Should |
 | Giao diện xem run của nhiều experiment cùng lúc (API đã hỗ trợ) | 2 | Should |
 | Tự cập nhật run đang chạy (polling) | 4 | Should |
 | Chế độ giảm chiều (PCA) khi có nhiều hơn 3 siêu tham số | 4 | Could |
@@ -132,7 +130,7 @@ created_at           status: running |        accuracy       (0–1)
 ## Thiết kế không gian 3D
 
 > [!NOTE]
-> Trục mặc định, màu, kích thước và trạng thái **đã được cài đặt**. Instanced mesh chưa có.
+> Toàn bộ thiết kế dưới đây **đã được cài đặt**, gồm cả instanced mesh.
 
 Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số liệu khó trả lời: *run tốt nằm ở vùng cấu hình nào?* và *vùng nào chưa được thử?* Vì vậy **vị trí thể hiện đầu vào (siêu tham số), còn hình thức thể hiện kết quả**.
 
@@ -150,7 +148,7 @@ Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số 
 - Key không phải số (`optimizer` là chuỗi, `hidden_layers` là danh sách) chưa làm trục được ở PoC, nhưng vẫn hiện trong Inspector Panel.
 - Run thiếu một siêu tham số đang dùng làm trục được đặt ở mặt phẳng "không xác định" và vẽ mờ.
 - Không dùng epoch, accuracy và loss làm 3 trục cùng lúc: accuracy và loss gần như tỉ lệ nghịch nên các điểm sẽ dồn trên một đường, còn số epoch thường giống nhau giữa các run.
-- Mục tiêu hiệu năng: ≥ 200 node ở 60 fps (dùng instanced mesh).
+- Hiệu năng: ≥ 200 node ở 60 fps (dùng instanced mesh). Số đo ở [`docs/performance.md`](docs/performance.md).
 
 ---
 
@@ -172,7 +170,7 @@ Trợ lý dùng **tool calling (function calling)**: LLM **không** được nh�
 | `compare_runs(run_ids)` | So sánh siêu tham số và metrics cuối |
 | `detect_overfitting(run_id)` | Phân tích khoảng cách train/val qua các epoch (tính bằng code, không do LLM tự đoán) |
 
-**Công cụ điều khiển giao diện** (backend trả về dưới dạng `actions`, frontend thực thi qua Zustand store):
+**Công cụ điều khiển giao diện** (backend trả về dưới dạng `actions`, frontend thực thi qua Zustand store). Khi trả lời về run tốt nhất, so sánh hay chẩn đoán, backend tự thêm các action này để bớt một vòng gọi LLM, nên AI chỉ gọi các tool dưới đây khi người dùng yêu cầu hiển thị run khác:
 
 | Tool | Chức năng |
 |---|---|
@@ -204,9 +202,9 @@ Nhà cung cấp LLM: **Gemini**, mặc định model `gemini-3.5-flash-lite` tr�
 | Phần | Công nghệ |
 |---|---|
 | **Backend** | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2 (async) + aiosqlite, SQLite (chế độ WAL) |
-| **Frontend** *(Phase 2)* | React 18, Vite, TypeScript, Tailwind CSS, React Three Fiber + drei, Zustand |
+| **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, React Three Fiber + drei, Zustand |
 | **AI** | Gemini qua SDK `google-genai`, dùng tool calling, gọi qua backend |
-| **Công cụ** | uv (quản lý gói Python), pnpm, Ruff, pytest + pytest-cov, GitHub Actions |
+| **Công cụ** | uv (quản lý gói Python), pnpm, Ruff, pytest + pytest-cov, Vitest, Playwright, GitHub Actions |
 
 ---
 
@@ -221,8 +219,12 @@ Nhà cung cấp LLM: **Gemini**, mặc định model `gemini-3.5-flash-lite` tr�
 │   ├── workflows/ci.yml          # CI: lint + test cho mỗi PR
 │   └── pull_request_template.md  # Mẫu PR
 ├── docs/
-│   └── PLAN.md                   # Kế hoạch chi tiết & lộ trình
+│   ├── PLAN.md                   # Kế hoạch chi tiết & lộ trình
+│   ├── DEMO.md                   # Kịch bản demo
+│   ├── performance.md            # Số đo hiệu năng
+│   └── screenshots/              # Ảnh các luồng chính
 ├── frontend/                     # React + R3F (khung 3 panel, store, API client)
+│   └── scripts/                  # Phần chạy trên trình duyệt của smoke test và benchmark
 └── backend/
     ├── pyproject.toml            # Dependencies & cấu hình pytest/ruff/coverage
     ├── .env.example              # Mẫu biến môi trường
@@ -237,7 +239,9 @@ Nhà cung cấp LLM: **Gemini**, mặc định model `gemini-3.5-flash-lite` tr�
     │   └── utils/seed_data.py    # Sinh dữ liệu giả lập
     ├── scripts/
     │   ├── train_mnist_demo.py   # Script huấn luyện demo
-    │   └── log_to_api.py         # Client Python để ghi log lên API
+    │   ├── log_to_api.py         # Client Python để ghi log lên API
+    │   ├── smoke_test.py         # Kiểm tra end-to-end
+    │   └── benchmark.py          # Đo hiệu năng, ghi docs/performance.md
     └── tests/                    # Bộ kiểm thử pytest
 ```
 
@@ -482,12 +486,37 @@ uv run ruff format .          # định dạng code
 
 Mỗi bài test dùng một database SQLite **trong bộ nhớ** riêng, nên không ảnh hưởng tới `mlops.db` của bạn.
 
+```bash
+cd frontend
+
+pnpm test                     # chạy toàn bộ test
+pnpm test:coverage            # kèm báo cáo độ phủ, yêu cầu src/utils đạt ≥ 70%
+```
+
+**Smoke test end-to-end** khởi động backend và frontend trên cổng riêng với database tạm, seed dữ liệu, gọi API, rồi mở Chrome hoặc Edge ở chế độ ẩn để kiểm tra: không gian 3D tải được, click node hiện Inspector, hỏi AI thì run được làm nổi bật. Có thể chạy song song với server đang dùng.
+
+```bash
+cd backend
+
+uv run python scripts/smoke_test.py               # dùng LLM giả lập, không tốn lượt gọi
+uv run python scripts/smoke_test.py --no-browser  # chỉ kiểm tra API và server
+uv run python scripts/benchmark.py --real-llm     # đo FPS, API, AI và ghi docs/performance.md
+```
+
 **CI (GitHub Actions)** chạy tự động cho mỗi Pull Request vào `main`:
 
 | Job | Kiểm tra |
 |---|---|
 | `backend` | `ruff format --check`, `ruff check`, `pytest --cov` |
-| `frontend` | `lint`, `typecheck`, `build` (tự bỏ qua khi chưa có `frontend/package.json`) |
+| `frontend` | `lint`, `typecheck`, `test:coverage`, `build` (tự bỏ qua khi chưa có `frontend/package.json`) |
+
+---
+
+## Demo
+
+Kịch bản demo từng bước nằm ở [`docs/DEMO.md`](docs/DEMO.md).
+
+![AI trả lời, làm nổi bật run tốt nhất và bay camera tới](docs/screenshots/03-copilot.png)
 
 ---
 
@@ -498,10 +527,10 @@ Chi tiết từng task: [`docs/PLAN.md`](docs/PLAN.md).
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | 1 | **Nền tảng Backend & MLOps:** API tracking, database, validation, script demo, dữ liệu mẫu, kiểm thử | ✅ Xong |
-| 2 | **Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D theo [thiết kế](#thiết-kế-không-gian-3d), chọn trục, click/hover, Inspector Panel, camera bay tới node. Backend bổ sung `DELETE` | 🚧 Phần lớn đã có |
-| 3 | **AI Copilot:** kết nối LLM, các tool truy vấn và tool điều khiển giao diện theo [thiết kế](#thiết-kế-trợ-lý-ai), bộ câu hỏi kiểm thử độ chính xác | 🚧 Mới có tìm run tốt nhất |
-| 4 | **Đồng bộ & hoàn thiện:** đồng bộ 3 khung, sidebar, polling run đang chạy, tối ưu hiệu năng (≥ 200 node @ 60 fps), dark mode | ⏳ |
-| 5 | **Kiểm thử & demo:** smoke test end-to-end, benchmark, tài liệu demo, báo cáo | ⏳ |
+| 2 | **Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D theo [thiết kế](#thiết-kế-không-gian-3d), chọn trục, click/hover, Inspector Panel, camera bay tới node. Backend bổ sung `DELETE` | 🚧 Còn biểu đồ theo epoch |
+| 3 | **AI Copilot:** kết nối LLM, các tool truy vấn và tool điều khiển giao diện theo [thiết kế](#thiết-kế-trợ-lý-ai), bộ câu hỏi kiểm thử độ chính xác | ✅ Xong |
+| 4 | **Đồng bộ & hoàn thiện:** đồng bộ 3 khung, sidebar, tối ưu hiệu năng (≥ 200 node @ 60 fps), dark mode | ✅ Xong |
+| 5 | **Kiểm thử & demo:** smoke test end-to-end, benchmark, tài liệu demo | ✅ Xong |
 
 ---
 

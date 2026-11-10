@@ -2,8 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
-from app.routers.deps import DbSession, error_responses
+from app.routers.deps import DbSession, PathId, error_responses
 from app.schemas import RunCreate, RunDetail, RunRead, RunSummary, RunUpdate
+from app.schemas.base import SQLITE_INT_MAX
 from app.services import tracking
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -28,7 +29,9 @@ async def create_run(data: RunCreate, db: DbSession):
 )
 async def list_runs(
     db: DbSession,
-    experiment_id: Annotated[int | None, Query(ge=1, description="Filter by experiment")] = None,
+    experiment_id: Annotated[
+        int | None, Query(ge=1, le=SQLITE_INT_MAX, description="Filter by experiment")
+    ] = None,
 ):
     runs = await tracking.list_runs(db, experiment_id)
     return [RunSummary.from_run(run) for run in runs]
@@ -40,7 +43,7 @@ async def list_runs(
     responses=error_responses(404),
     summary="Get a run with its full metrics timeline",
 )
-async def get_run(run_id: int, db: DbSession):
+async def get_run(run_id: PathId, db: DbSession):
     return await tracking.get_run(db, run_id, with_metrics=True)
 
 
@@ -50,7 +53,7 @@ async def get_run(run_id: int, db: DbSession):
     responses=error_responses(404, 409),
     summary="Update run status (completed / failed / running)",
 )
-async def update_run(run_id: int, data: RunUpdate, db: DbSession):
+async def update_run(run_id: PathId, data: RunUpdate, db: DbSession):
     return await tracking.update_run(db, run_id, data)
 
 
@@ -60,5 +63,5 @@ async def update_run(run_id: int, data: RunUpdate, db: DbSession):
     responses=error_responses(404),
     summary="Delete a run with its metrics",
 )
-async def delete_run(run_id: int, db: DbSession) -> None:
+async def delete_run(run_id: PathId, db: DbSession) -> None:
     await tracking.delete_run(db, run_id)

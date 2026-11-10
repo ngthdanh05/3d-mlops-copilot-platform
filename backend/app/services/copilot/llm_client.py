@@ -101,13 +101,6 @@ class FakeLLMClient:
             )
 
         best = result["runs"][0]
-        if len(tool_messages) == 1:
-            return LLMReply(
-                tool_calls=[
-                    ToolCall("2", "highlight_runs", {"run_ids": [best["run_id"]]}),
-                    ToolCall("3", "focus_camera", {"run_id": best["run_id"]}),
-                ]
-            )
         return LLMReply(
             text=(
                 f"{_FAKE_PREFIX} {best['run_name']} có {result['metric']} "

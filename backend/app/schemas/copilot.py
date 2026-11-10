@@ -2,14 +2,14 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.base import InputSchema
+from app.schemas.base import DatabaseId, InputSchema
 
 
 class ChatRequest(InputSchema):
     """`POST /api/copilot/chat`."""
 
     message: str = Field(min_length=1, max_length=4000, examples=["Run nào tốt nhất?"])
-    experiment_id: int | None = Field(default=None, ge=1)
+    experiment_id: DatabaseId | None = None
 
 
 class HighlightRunsAction(BaseModel):

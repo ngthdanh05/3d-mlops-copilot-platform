@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status
 
-from app.routers.deps import DbSession, error_responses
+from app.routers.deps import DbSession, PathId, error_responses
 from app.schemas import ExperimentCreate, ExperimentRead
 from app.services import tracking
 
@@ -29,7 +29,7 @@ async def list_experiments(db: DbSession):
     responses=error_responses(404),
     summary="Get an experiment",
 )
-async def get_experiment(experiment_id: int, db: DbSession):
+async def get_experiment(experiment_id: PathId, db: DbSession):
     return await tracking.get_experiment(db, experiment_id)
 
 
@@ -39,5 +39,5 @@ async def get_experiment(experiment_id: int, db: DbSession):
     responses=error_responses(404),
     summary="Delete an experiment with its runs and metrics",
 )
-async def delete_experiment(experiment_id: int, db: DbSession) -> None:
+async def delete_experiment(experiment_id: PathId, db: DbSession) -> None:
     await tracking.delete_experiment(db, experiment_id)

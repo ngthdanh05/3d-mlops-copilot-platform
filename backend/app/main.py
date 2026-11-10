@@ -1,11 +1,14 @@
 """FastAPI application entry point."""
 
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.config import get_settings
 from app.database import engine, init_db
@@ -40,6 +43,16 @@ app.add_middleware(
 @app.exception_handler(ServiceError)
 async def service_error_handler(_request: Request, exc: ServiceError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(_request: Request, exc: RequestValidationError) -> Response:
+    # Escaped to ASCII: the rejected input may hold lone surrogates, which UTF-8 cannot encode.
+    return Response(
+        json.dumps({"detail": jsonable_encoder(exc.errors())}),
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        media_type="application/json",
+    )
 
 
 app.include_router(experiments.router)

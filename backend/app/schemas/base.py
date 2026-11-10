@@ -16,6 +16,10 @@ def _as_utc(value: datetime) -> datetime:
 UTCDateTime = Annotated[datetime, AfterValidator(_as_utc)]
 """A datetime that is always timezone-aware UTC, serialized as ISO 8601."""
 
+SQLITE_INT_MAX = 2**63 - 1
+"""Larger integers cannot be bound to a SQLite query."""
+
+DatabaseId = Annotated[int, Field(ge=1, le=SQLITE_INT_MAX)]
 Probability = Annotated[float, Field(ge=0.0, le=1.0)]
 NonNegativeFloat = Annotated[float, Field(ge=0.0)]
 

@@ -72,6 +72,9 @@ async def _find_best_runs(context: ToolContext, args: FindBestRunsArgs) -> dict[
         top_k=None,
     )
     values = [value for _, value in ranked]
+    if ranked:
+        shown = [run.id for run, _ in ranked[: args.top_k]]
+        context.show_runs(shown, shown[0])
     return {
         "metric": args.metric,
         "completed_runs": len(ranked),
@@ -125,6 +128,9 @@ async def _compare_runs(context: ToolContext, args: CompareRunsArgs) -> dict[str
         await tracking.get_run(context.db, run_id, with_metrics=True) for run_id in args.run_ids
     ]
     summaries = [RunSummary.from_run(run) for run in runs]
+    best = _best_by_metric(summaries)
+    better = best.get("val_accuracy") or best.get("accuracy")
+    context.show_runs(args.run_ids, better["run_id"] if better else args.run_ids[0])
     return {
         "runs": [
             {
@@ -135,7 +141,7 @@ async def _compare_runs(context: ToolContext, args: CompareRunsArgs) -> dict[str
             for run, summary in zip(runs, summaries, strict=True)
         ],
         **_split_hyperparams(runs),
-        "best_by_metric": _best_by_metric(summaries),
+        "best_by_metric": best,
     }
 
 
@@ -143,6 +149,7 @@ async def _detect_overfitting(context: ToolContext, args: RunIdArgs) -> dict[str
     run = await tracking.get_run(context.db, args.run_id, with_metrics=True)
     gap = _accuracy_gap(run.metrics)
     val_loss = _val_loss_trend(run.metrics)
+    context.show_runs([run.id], run.id)
     return {
         **_identify(run),
         "verdict": _overfitting_verdict(gap, val_loss),

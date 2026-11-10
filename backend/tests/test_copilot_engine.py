@@ -143,27 +143,6 @@ async def test_stream_retracts_text_written_alongside_a_tool_call(client):
     assert events[-1]["message"] == "Câu trả lời."
 
 
-async def test_stream_does_not_extend_an_answer_that_is_being_held(client):
-    exp = await make_experiment(client)
-    run = await make_run(client, exp, "run-a", 0.9, 0.2)
-    use_llm(
-        ScriptedLLM(
-            [
-                LLMReply(tool_calls=[call("find_best_runs", metric="val_accuracy")]),
-                LLMReply(text="Giữ nguyên."),
-                LLMReply(text="Viết lại.", tool_calls=[call("focus_camera", run_id=run)]),
-            ]
-        )
-    )
-
-    events = await stream_events(client, "q", exp)
-
-    assert streamed_text(events) == "Giữ nguyên."
-    assert all(event["type"] != "reset" for event in events)
-    assert events[-1]["message"] == "Giữ nguyên."
-    assert events[-1]["actions"] == [{"type": "focus_camera", "run_id": run}]
-
-
 async def test_stream_reports_llm_failure_in_the_final_event(client):
     use_llm(ScriptedLLM([LLMError("boom")]))
 
@@ -186,6 +165,7 @@ async def test_fake_llm_finds_best_run_and_returns_actions(client):
     assert body["actions"] == [
         {"type": "highlight_runs", "run_ids": [best]},
         {"type": "focus_camera", "run_id": best},
+        {"type": "open_inspector", "run_id": best},
     ]
 
 
@@ -355,11 +335,7 @@ async def test_find_best_runs_gives_context_to_explain_the_result(client):
     exp = await make_experiment(client)
     for name, accuracy in [("a", 0.6), ("b", 0.7), ("c", 0.9)]:
         await make_run(client, exp, name, accuracy, 0.3)
-    llm = use_llm(
-        ScriptedLLM(
-            [LLMReply(tool_calls=[call("find_best_runs")]), LLMReply(text="ok"), LLMReply()]
-        )
-    )
+    llm = use_llm(ScriptedLLM([LLMReply(tool_calls=[call("find_best_runs")]), LLMReply(text="ok")]))
 
     await client.post(CHAT, json={"message": "q", "experiment_id": exp})
 
@@ -378,7 +354,6 @@ async def test_compare_question_gets_database_numbers_and_highlights(client):
             [
                 LLMReply(tool_calls=[call("find_runs_by_name", run_names=["run-001", "run-003"])]),
                 LLMReply(tool_calls=[call("compare_runs", run_ids=[a, b])]),
-                LLMReply(tool_calls=[call("highlight_runs", run_ids=[a, b])]),
                 LLMReply(text="run-001 tốt hơn"),
             ]
         )
@@ -392,7 +367,11 @@ async def test_compare_question_gets_database_numbers_and_highlights(client):
 
     assert body == {
         "message": "run-001 tốt hơn",
-        "actions": [{"type": "highlight_runs", "run_ids": [a, b]}],
+        "actions": [
+            {"type": "highlight_runs", "run_ids": [a, b]},
+            {"type": "focus_camera", "run_id": a},
+            {"type": "open_inspector", "run_id": a},
+        ],
     }
     lookup = json.loads(llm.seen[1][-1].content)
     assert [run["run_id"] for run in lookup["runs"]] == [a, b]
@@ -431,7 +410,6 @@ async def test_diagnose_question_gets_verdict_from_code_and_focuses_the_run(clie
             [
                 LLMReply(tool_calls=[call("find_runs_by_name", run_names=["run-002"])]),
                 LLMReply(tool_calls=[call("detect_overfitting", run_id=run)]),
-                LLMReply(tool_calls=[call("focus_camera", run_id=run)]),
                 LLMReply(text="Có"),
             ]
         )
@@ -441,7 +419,14 @@ async def test_diagnose_question_gets_verdict_from_code_and_focuses_the_run(clie
         await client.post(CHAT, json={"message": "run-002 có overfit không?", "experiment_id": exp})
     ).json()
 
-    assert body == {"message": "Có", "actions": [{"type": "focus_camera", "run_id": run}]}
+    assert body == {
+        "message": "Có",
+        "actions": [
+            {"type": "highlight_runs", "run_ids": [run]},
+            {"type": "focus_camera", "run_id": run},
+            {"type": "open_inspector", "run_id": run},
+        ],
+    }
     diagnosis = json.loads(llm.seen[2][-1].content)
     assert diagnosis["verdict"] == "overfitting"
     assert diagnosis["val_loss_trend"]["lowest_epoch"] == 2
@@ -526,73 +511,7 @@ async def test_all_tool_calls_of_one_round_run_and_are_answered(client):
     assert [action["type"] for action in body["actions"]] == ["highlight_runs", "open_inspector"]
 
 
-async def test_answer_without_marking_runs_gets_one_reminder_and_stays_unchanged(client):
-    exp = await make_experiment(client)
-    run = await make_run(client, exp, "r", 0.9, 0.1)
-    llm = use_llm(
-        ScriptedLLM(
-            [
-                LLMReply(tool_calls=[call("find_best_runs")]),
-                LLMReply(text="r: 0.9000"),
-                LLMReply(
-                    text="r: 0.1234",
-                    tool_calls=[
-                        call("highlight_runs", run_ids=[run]),
-                        call("focus_camera", run_id=run),
-                    ],
-                ),
-            ]
-        )
-    )
-
-    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
-
-    assert body == {
-        "message": "r: 0.9000",
-        "actions": [
-            {"type": "highlight_runs", "run_ids": [run]},
-            {"type": "focus_camera", "run_id": run},
-        ],
-    }
-    assert len(llm.seen) == 3
-    assert "highlight_runs" in llm.seen[2][-1].content
-
-
-async def test_model_that_ignores_the_reminder_still_gets_its_answer_out(client):
-    exp = await make_experiment(client)
-    await make_run(client, exp, "r", 0.9, 0.1)
-    llm = use_llm(
-        ScriptedLLM(
-            [
-                LLMReply(tool_calls=[call("find_best_runs")]),
-                LLMReply(text="first"),
-                LLMReply(text="second"),
-            ]
-        )
-    )
-
-    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
-
-    assert body == {"message": "first", "actions": []}
-    assert len(llm.seen) == 3
-
-
-@pytest.mark.parametrize("failure", [LLMError("boom"), LLMRateLimitError("quota")])
-async def test_llm_failure_during_the_reminder_keeps_the_answer(client, failure):
-    exp = await make_experiment(client)
-    await make_run(client, exp, "r", 0.9, 0.1)
-    use_llm(
-        ScriptedLLM(
-            [LLMReply(tool_calls=[call("find_best_runs")]), LLMReply(text="answer"), failure]
-        )
-    )
-
-    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
-
-    assert body == {"message": "answer", "actions": []}
-
-
-async def test_no_reminder_when_there_is_nothing_to_mark(client):
+async def test_nothing_is_marked_when_no_tool_found_runs_to_show(client):
     exp = await make_experiment(client)
     run = await make_run(client, exp, "running", 0.9, 0.1, status="running")
     scripts = [
@@ -603,26 +522,168 @@ async def test_no_reminder_when_there_is_nothing_to_mark(client):
     for tool_call in scripts:
         llm = use_llm(ScriptedLLM([LLMReply(tool_calls=[tool_call]), LLMReply(text="done")]))
 
-        await client.post(CHAT, json={"message": "q", "experiment_id": exp})
+        body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
 
+        assert body["actions"] == []
         assert len(llm.seen) == 2
 
 
-async def test_no_reminder_when_the_model_already_marked_a_run(client):
+def chart_actions(run_ids: list[int], main: int) -> list[dict]:
+    return [
+        {"type": "highlight_runs", "run_ids": run_ids},
+        {"type": "focus_camera", "run_id": main},
+        {"type": "open_inspector", "run_id": main},
+    ]
+
+
+async def test_best_runs_are_marked_without_another_llm_round(client):
     exp = await make_experiment(client)
-    run = await make_run(client, exp, "r", 0.9, 0.1)
+    second = await make_run(client, exp, "second", 0.8, 0.3)
+    first = await make_run(client, exp, "first", 0.9, 0.2)
+    await make_run(client, exp, "third", 0.7, 0.4)
     llm = use_llm(
+        ScriptedLLM([LLMReply(tool_calls=[call("find_best_runs", top_k=2)]), LLMReply(text="ok")])
+    )
+
+    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
+
+    assert body["actions"] == chart_actions([first, second], first)
+    assert len(llm.seen) == 2
+
+
+async def test_comparison_focuses_the_better_run_wherever_it_is_listed(client):
+    exp = await make_experiment(client)
+    worse = await make_run(client, exp, "worse", 0.7, 0.4)
+    better = await make_run(client, exp, "better", 0.9, 0.2)
+    use_llm(
         ScriptedLLM(
             [
-                LLMReply(tool_calls=[call("find_best_runs"), call("focus_camera", run_id=run)]),
+                LLMReply(tool_calls=[call("compare_runs", run_ids=[worse, better])]),
+                LLMReply(text="k"),
+            ]
+        )
+    )
+
+    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
+
+    assert body["actions"] == chart_actions([worse, better], better)
+
+
+async def test_comparison_without_finished_runs_focuses_the_first(client):
+    exp = await make_experiment(client)
+    a = await make_run(client, exp, "a", 0.7, 0.4, status="running")
+    b = await make_run(client, exp, "b", 0.9, 0.2, status="running")
+    use_llm(
+        ScriptedLLM(
+            [LLMReply(tool_calls=[call("compare_runs", run_ids=[a, b])]), LLMReply(text="k")]
+        )
+    )
+
+    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
+
+    assert body["actions"] == chart_actions([a, b], a)
+
+
+async def test_the_latest_answering_tool_decides_what_is_marked(client):
+    exp = await make_experiment(client)
+    a = await make_run(client, exp, "a", 0.7, 0.4)
+    b = await make_run(client, exp, "b", 0.9, 0.2)
+    use_llm(
+        ScriptedLLM(
+            [
+                LLMReply(tool_calls=[call("find_best_runs")]),
+                LLMReply(tool_calls=[call("compare_runs", run_ids=[a, b])]),
+                LLMReply(text="ok"),
+            ]
+        )
+    )
+
+    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
+
+    assert body["actions"] == chart_actions([a, b], b)
+
+
+async def test_actions_the_model_asked_for_replace_the_automatic_ones(client):
+    exp = await make_experiment(client)
+    best = await make_run(client, exp, "best", 0.9, 0.1)
+    other = await make_run(client, exp, "other", 0.5, 0.5)
+    use_llm(
+        ScriptedLLM(
+            [
+                LLMReply(tool_calls=[call("find_best_runs"), call("focus_camera", run_id=other)]),
                 LLMReply(text="done"),
             ]
         )
     )
 
-    await client.post(CHAT, json={"message": "q", "experiment_id": exp})
+    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
 
-    assert len(llm.seen) == 2
+    assert best not in [action.get("run_id") for action in body["actions"]]
+    assert body["actions"] == [{"type": "focus_camera", "run_id": other}]
+
+
+async def test_rate_limit_keeps_the_runs_already_found(client):
+    exp = await make_experiment(client)
+    run = await make_run(client, exp, "r", 0.9, 0.1)
+    use_llm(
+        ScriptedLLM([LLMReply(tool_calls=[call("find_best_runs")]), LLMRateLimitError("quota")])
+    )
+
+    body = (await client.post(CHAT, json={"message": "q", "experiment_id": exp})).json()
+
+    assert "giới hạn" in body["message"]
+    assert body["actions"] == chart_actions([run], run)
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["So sánh run-7 với cái khác", "RUN-7 có bị overfit không?", "Còn run-7?", "xem run-7."],
+)
+async def test_runs_named_in_the_question_reach_the_model_with_their_id(client, question):
+    exp = await make_experiment(client)
+    run = await make_run(client, exp, "run-7", 0.9, 0.1)
+    llm = use_llm(ScriptedLLM([LLMReply(text="ok")]))
+
+    await client.post(CHAT, json={"message": question, "experiment_id": exp})
+
+    [asked, note] = llm.seen[0]
+    assert asked.content == question
+    assert f"run-7 is run_id {run} in experiment {exp}" in note.content
+
+
+async def test_a_run_of_the_same_name_in_another_experiment_is_not_listed(client):
+    mine = await make_experiment(client, "mine")
+    other = await make_experiment(client, "other")
+    await make_run(client, other, "run-7", 0.9, 0.1)
+    llm = use_llm(ScriptedLLM([LLMReply(text="ok")]))
+
+    await client.post(CHAT, json={"message": "run-7", "experiment_id": mine})
+
+    assert len(llm.seen[0]) == 1
+
+
+async def test_without_an_experiment_every_match_is_listed_for_the_model_to_ask(client):
+    first = await make_experiment(client, "first")
+    second = await make_experiment(client, "second")
+    a = await make_run(client, first, "run-7", 0.9, 0.1)
+    b = await make_run(client, second, "run-7", 0.8, 0.2)
+    llm = use_llm(ScriptedLLM([LLMReply(text="ok")]))
+
+    await client.post(CHAT, json={"message": "run-7"})
+
+    note = llm.seen[0][1].content
+    assert f"run_id {a} in experiment {first}" in note
+    assert f"run_id {b} in experiment {second}" in note
+
+
+async def test_no_note_when_the_question_names_no_run(client):
+    exp = await make_experiment(client)
+    await make_run(client, exp, "run-7", 0.9, 0.1)
+    llm = use_llm(ScriptedLLM([LLMReply(text="ok")]))
+
+    await client.post(CHAT, json={"message": "run-8 thì sao?", "experiment_id": exp})
+
+    assert len(llm.seen[0]) == 1
 
 
 async def test_request_validation(client):
@@ -864,8 +925,6 @@ class RecordingLLM:
 def faithful_llm(case: AccuracyCase, text: str | None = None) -> ScriptedLLM:
     """A model that calls the right tools and reports the expected numbers."""
     replies = [LLMReply(tool_calls=[call(case.tool, **case.tool_args)])]
-    if case.highlighted:
-        replies.append(LLMReply(tool_calls=[call("highlight_runs", run_ids=[*case.highlighted])]))
     default = " ".join([*case.names, *(f"{abs(number):.4f}" for number in case.numbers)])
     replies.append(LLMReply(text=default if text is None else text))
     return ScriptedLLM(replies)
