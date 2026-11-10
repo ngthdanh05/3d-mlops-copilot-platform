@@ -147,7 +147,7 @@ def load_dataset(name: str, mnist_samples: int, seed: int) -> Dataset:
     x_train, x_val, y_train, y_val = train_test_split(
         x, y, test_size=0.2, stratify=y, random_state=seed
     )
-    return Dataset(x_train, y_train, x_val, y_val)
+    return Dataset(np.asarray(x_train), np.asarray(y_train), np.asarray(x_val), np.asarray(y_val))
 
 
 def _evaluate(model: MLPClassifier, x: np.ndarray, y: np.ndarray, classes) -> tuple[float, float]:
@@ -170,7 +170,8 @@ def train_and_log(
         hidden_layer_sizes=cfg.hidden_layers,
         solver=cfg.optimizer,
         learning_rate_init=cfg.learning_rate,
-        batch_size=min(cfg.batch_size, len(x_train)),
+        # scikit-learn has no type hints: the checker infers str from the "auto" default.
+        batch_size=min(cfg.batch_size, len(x_train)),  # pyright: ignore[reportArgumentType]
         alpha=cfg.alpha,
         momentum=0.9,
         random_state=cfg.seed,

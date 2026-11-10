@@ -137,7 +137,7 @@ def _to_gemini_contents(messages: list[LLMMessage]) -> list[types.Content]:
                 )
             )
             if previous_role == "tool":
-                contents[-1].parts.append(part)
+                contents[-1].parts = [*(contents[-1].parts or []), part]
             else:
                 # The API rejects role="tool": function results are sent as a user turn.
                 contents.append(types.Content(role="user", parts=[part]))

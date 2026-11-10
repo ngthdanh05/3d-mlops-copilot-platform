@@ -74,6 +74,11 @@ def call(name: str, **arguments) -> ToolCall:
     return ToolCall(id=name, name=name, arguments=arguments)
 
 
+def content_of(message: LLMMessage) -> str:
+    assert message.content is not None
+    return message.content
+
+
 async def make_experiment(client, name: str = "exp") -> int:
     response = await client.post("/api/experiments", json={"name": name})
     return response.json()["id"]
@@ -236,13 +241,13 @@ async def test_invalid_arguments_are_returned_to_the_model(client):
     body = (await client.post(CHAT, json={"message": "q"})).json()
 
     assert body == {"message": "done", "actions": []}
-    assert "Invalid arguments" in llm.seen[1][-1].content
+    assert "Invalid arguments" in content_of(llm.seen[1][-1])
 
 
 async def test_unknown_tool_is_returned_to_the_model(client):
     llm = use_llm(ScriptedLLM([LLMReply(tool_calls=[call("drop_tables")]), LLMReply(text="done")]))
     await client.post(CHAT, json={"message": "q"})
-    assert "Unknown tool" in llm.seen[1][-1].content
+    assert "Unknown tool" in content_of(llm.seen[1][-1])
 
 
 async def test_nonexistent_runs_never_reach_the_frontend(client):
@@ -339,7 +344,7 @@ async def test_find_best_runs_gives_context_to_explain_the_result(client):
 
     await client.post(CHAT, json={"message": "q", "experiment_id": exp})
 
-    result = json.loads(llm.seen[1][-1].content)
+    result = json.loads(content_of(llm.seen[1][-1]))
     assert result["completed_runs"] == 3
     assert result["median_value"] == 0.7
     assert [run["run_name"] for run in result["runs"]] == ["c"]
@@ -373,9 +378,9 @@ async def test_compare_question_gets_database_numbers_and_highlights(client):
             {"type": "open_inspector", "run_id": a},
         ],
     }
-    lookup = json.loads(llm.seen[1][-1].content)
+    lookup = json.loads(content_of(llm.seen[1][-1]))
     assert [run["run_id"] for run in lookup["runs"]] == [a, b]
-    compared = json.loads(llm.seen[2][-1].content)
+    compared = json.loads(content_of(llm.seen[2][-1]))
     assert compared["best_by_metric"]["val_accuracy"] == {
         "run_id": a,
         "run_name": "run-001",
@@ -427,7 +432,7 @@ async def test_diagnose_question_gets_verdict_from_code_and_focuses_the_run(clie
             {"type": "open_inspector", "run_id": run},
         ],
     }
-    diagnosis = json.loads(llm.seen[2][-1].content)
+    diagnosis = json.loads(content_of(llm.seen[2][-1]))
     assert diagnosis["verdict"] == "overfitting"
     assert diagnosis["val_loss_trend"]["lowest_epoch"] == 2
 
@@ -480,7 +485,7 @@ async def test_highlight_tells_the_model_which_runs_do_not_exist(client):
 
     await client.post(CHAT, json={"message": "q"})
 
-    assert json.loads(llm.seen[1][-1].content) == {"highlighted": [real], "not_found": [12345]}
+    assert json.loads(content_of(llm.seen[1][-1])) == {"highlighted": [real], "not_found": [12345]}
 
 
 async def test_all_tool_calls_of_one_round_run_and_are_answered(client):
@@ -648,7 +653,7 @@ async def test_runs_named_in_the_question_reach_the_model_with_their_id(client, 
 
     [asked, note] = llm.seen[0]
     assert asked.content == question
-    assert f"run-7 is run_id {run} in experiment {exp}" in note.content
+    assert f"run-7 is run_id {run} in experiment {exp}" in content_of(note)
 
 
 async def test_a_run_of_the_same_name_in_another_experiment_is_not_listed(client):
@@ -671,7 +676,7 @@ async def test_without_an_experiment_every_match_is_listed_for_the_model_to_ask(
 
     await client.post(CHAT, json={"message": "run-7"})
 
-    note = llm.seen[0][1].content
+    note = content_of(llm.seen[0][1])
     assert f"run_id {a} in experiment {first}" in note
     assert f"run_id {b} in experiment {second}" in note
 
@@ -727,7 +732,7 @@ def _gap(metrics: list[Any]) -> float:
 
 
 def _lowest_val_loss(run: Run) -> float:
-    return min(m.val_loss for m in run.metrics)
+    return min(m.val_loss for m in run.metrics if m.val_loss is not None)
 
 
 def _median_of_final(runs: list[Run], metric: str) -> float:
@@ -868,7 +873,7 @@ def accuracy_problems(
     case: AccuracyCase, response: ChatResponse, messages: list[LLMMessage]
 ) -> list[str]:
     """Everything wrong with an answer; empty means it matches the database."""
-    results = [json.loads(m.content) for m in messages if m.role == "tool"]
+    results = [json.loads(content_of(m)) for m in messages if m.role == "tool"]
     known = [
         *_numbers_of(results),
         *(float(t.replace(",", ".")) for t in _numbers_in(case.question)),
@@ -924,7 +929,7 @@ class RecordingLLM:
 
 def faithful_llm(case: AccuracyCase, text: str | None = None) -> ScriptedLLM:
     """A model that calls the right tools and reports the expected numbers."""
-    replies = [LLMReply(tool_calls=[call(case.tool, **case.tool_args)])]
+    replies: list[LLMReply | Exception] = [LLMReply(tool_calls=[call(case.tool, **case.tool_args)])]
     default = " ".join([*case.names, *(f"{abs(number):.4f}" for number in case.numbers)])
     replies.append(LLMReply(text=default if text is None else text))
     return ScriptedLLM(replies)
@@ -959,8 +964,9 @@ async def test_faithful_answer_matches_the_database(session, name):
 @pytest.mark.parametrize("name", ACCURACY_CASES)
 async def test_invented_number_is_caught(session, name):
     def invents_a_number(case: AccuracyCase) -> ScriptedLLM:
-        names_and_numbers = faithful_llm(case).replies[-1].text
-        return faithful_llm(case, f"{names_and_numbers} 0.987654")
+        faithful_reply = faithful_llm(case).replies[-1]
+        assert isinstance(faithful_reply, LLMReply)
+        return faithful_llm(case, f"{faithful_reply.text} 0.987654")
 
     case, response, messages = await run_accuracy_case(session, name, invents_a_number)
 

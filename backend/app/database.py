@@ -1,6 +1,6 @@
 """Async SQLAlchemy engine, session factory and table bootstrap."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -30,7 +30,7 @@ def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
-async def get_db() -> AsyncIterator[AsyncSession]:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency yielding a database session."""
     async with AsyncSessionLocal() as session:
         yield session
