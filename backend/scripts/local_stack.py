@@ -4,6 +4,7 @@ They run on their own ports with a temporary database, so `mlops.db` and any dev
 the developer already has open are left alone.
 """
 
+import io
 import os
 import shutil
 import signal
@@ -33,8 +34,9 @@ class StackError(RuntimeError):
 
 def use_utf8_output() -> None:
     """Windows consoles default to a code page that cannot print Vietnamese."""
-    sys.stdout.reconfigure(encoding="utf-8")
-    sys.stderr.reconfigure(encoding="utf-8")
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8")
 
 
 def database_url(path: Path) -> str:

@@ -1,6 +1,7 @@
 """API behaviour at the edges: an empty database, the PoC's data scale and malformed input."""
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
@@ -42,7 +43,9 @@ async def seed_runs(session, count: int, name: str = "scale") -> tuple[int, dict
     ]
     session.add(experiment)
     await session.commit()
-    return experiment.id, {run.id: run.metrics[-1].val_accuracy for run in experiment.runs}
+    return experiment.id, {
+        run.id: cast(float, run.metrics[-1].val_accuracy) for run in experiment.runs
+    }
 
 
 # ── Empty database ────────────────────────────────────────────────────────────

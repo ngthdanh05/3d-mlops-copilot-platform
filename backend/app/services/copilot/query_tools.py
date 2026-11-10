@@ -226,21 +226,21 @@ def _accuracy_gap(metrics: Sequence[Metric]) -> dict[str, Any] | None:
 
 def _val_loss_trend(metrics: Sequence[Metric]) -> dict[str, Any] | None:
     """How far validation loss has climbed back up from its lowest point."""
-    points = [m for m in metrics if m.val_loss is not None]
+    points = [(m.epoch, m.val_loss, m.loss) for m in metrics if m.val_loss is not None]
     if len(points) < _MIN_EPOCHS:
         return None
     window = _window(len(points))
-    lowest = min(points, key=lambda m: m.val_loss)
-    final_val_loss = fmean(m.val_loss for m in points[-window:])
-    final_train_loss = fmean(m.loss for m in points[-window:])
+    lowest_epoch, lowest_val_loss, train_loss_at_lowest = min(points, key=lambda p: p[1])
+    final_val_loss = fmean(val_loss for _, val_loss, _ in points[-window:])
+    final_train_loss = fmean(loss for _, _, loss in points[-window:])
     return {
-        "lowest": lowest.val_loss,
-        "lowest_epoch": lowest.epoch,
+        "lowest": lowest_val_loss,
+        "lowest_epoch": lowest_epoch,
         "final": round(final_val_loss, 4),
         "rise_ratio": (
-            round(final_val_loss / lowest.val_loss - 1, 4) if lowest.val_loss > 0 else None
+            round(final_val_loss / lowest_val_loss - 1, 4) if lowest_val_loss > 0 else None
         ),
-        "train_loss_at_lowest": lowest.loss,
+        "train_loss_at_lowest": train_loss_at_lowest,
         "train_loss_final": round(final_train_loss, 4),
     }
 

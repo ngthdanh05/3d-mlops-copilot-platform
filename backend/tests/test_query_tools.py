@@ -15,6 +15,12 @@ from app.utils.seed_data import seed_database
 NOW = datetime(2026, 11, 7, 12, 0, tzinfo=UTC)
 
 
+def final_val_accuracy(run: Run) -> float:
+    value = run.metrics[-1].val_accuracy
+    assert value is not None
+    return value
+
+
 async def run_tool(session, name: str, **arguments) -> dict:
     context = ToolContext(db=session, experiment_id=None)
     return await _run_tool(ToolCall(id="1", name=name, arguments=arguments), context)
@@ -79,7 +85,7 @@ async def test_list_experiments_on_empty_database(session):
 async def test_find_best_runs_matches_seeded_data(session):
     runs = await seeded_runs(session)
     completed = [r for r in runs if r.status is RunStatus.COMPLETED]
-    expected = max(completed, key=lambda r: r.metrics[-1].val_accuracy)
+    expected = max(completed, key=final_val_accuracy)
 
     result = await run_tool(session, "find_best_runs", metric="val_accuracy")
 
@@ -196,7 +202,7 @@ async def test_compare_runs_on_seeded_data(session):
 
     assert [r["run_id"] for r in result["runs"]] == [r.id for r in runs]
     assert result["runs"][0]["final_val_loss"] == runs[0].metrics[-1].val_loss
-    best = max(runs, key=lambda r: r.metrics[-1].val_accuracy)
+    best = max(runs, key=final_val_accuracy)
     assert result["best_by_metric"]["val_accuracy"]["run_id"] == best.id
 
 

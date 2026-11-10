@@ -48,7 +48,7 @@ def test_experiment_create_strips_and_validates():
     with pytest.raises(ValidationError):
         ExperimentCreate(name="   ")
     with pytest.raises(ValidationError):
-        ExperimentCreate(name="x", unknown_field=1)
+        ExperimentCreate.model_validate({"name": "x", "unknown_field": 1})
 
 
 def test_experiment_read_from_orm_is_utc():
@@ -119,24 +119,29 @@ def test_run_create_rejects_invalid_hyperparams(hyperparams):
 
 def test_run_create_rejects_missing_fields():
     with pytest.raises(ValidationError):
-        RunCreate(run_name="r")
+        RunCreate.model_validate({"run_name": "r"})
     with pytest.raises(ValidationError):
         RunCreate(experiment_id=1, run_name="")
 
 
 def test_run_update_rules():
-    upd = RunUpdate(status="completed", finished_at="2026-11-06T17:30:00+07:00")
+    upd = RunUpdate.model_validate(
+        {"status": "completed", "finished_at": "2026-11-06T17:30:00+07:00"}
+    )
     assert upd.status is RunStatus.COMPLETED
+    assert upd.finished_at is not None
     assert upd.finished_at == datetime(2026, 11, 6, 10, 30, tzinfo=UTC)
     assert upd.finished_at.tzinfo is UTC
-    assert RunUpdate(status="failed").finished_at is None
+    assert RunUpdate.model_validate({"status": "failed"}).finished_at is None
 
     with pytest.raises(ValidationError):
         RunUpdate()
     with pytest.raises(ValidationError):
-        RunUpdate(status="paused")
+        RunUpdate.model_validate({"status": "paused"})
     with pytest.raises(ValidationError):
-        RunUpdate(status="running", finished_at=datetime.now(timezone(timedelta(hours=7))))
+        RunUpdate.model_validate(
+            {"status": "running", "finished_at": datetime.now(timezone(timedelta(hours=7)))}
+        )
 
 
 def test_run_summary_uses_last_epoch():

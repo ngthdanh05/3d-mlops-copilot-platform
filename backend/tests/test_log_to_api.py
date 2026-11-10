@@ -16,10 +16,11 @@ def tracking(session_factory):
 
     app.dependency_overrides[get_db] = _get_db
     # Not used as a context manager: that would run the lifespan against the real mlops.db.
-    http = TestClient(app)  # httpx.Client subclass bound to the ASGI app
+    http = TestClient(app)  # bound to the ASGI app
     client = TrackingClient()
     client._http.close()
-    client._http = http
+    # TestClient subclasses httpx2.Client, which has the same API as the httpx.Client it replaces.
+    client._http = http  # pyright: ignore[reportAttributeAccessIssue]
     yield client
     client.close()
     app.dependency_overrides.clear()

@@ -145,5 +145,12 @@ class ActiveRun:
     def name(self) -> str:
         return self.data["run_name"]
 
-    def log(self, epoch: int, **metrics: float | None) -> dict[str, Any]:
-        return self.client.log_metric(self.id, epoch, **metrics)
+    def log(
+        self,
+        epoch: int,
+        accuracy: float,
+        loss: float,
+        val_accuracy: float | None = None,
+        val_loss: float | None = None,
+    ) -> dict[str, Any]:
+        return self.client.log_metric(self.id, epoch, accuracy, loss, val_accuracy, val_loss)

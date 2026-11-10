@@ -252,7 +252,8 @@ def fresh_client_cache():
 
 
 def use_settings(monkeypatch, **values) -> None:
-    settings = Settings(_env_file=None, **values)
+    # _env_file is a pydantic-settings init option that static checkers cannot see.
+    settings = Settings(_env_file=None, **values)  # pyright: ignore[reportCallIssue]
     monkeypatch.setattr(llm_client, "get_settings", lambda: settings)
 
 
@@ -270,4 +271,6 @@ def test_key_selects_gemini_with_default_model(monkeypatch, fresh_client_cache):
 
 def test_configured_model_is_used(monkeypatch, fresh_client_cache):
     use_settings(monkeypatch, llm_api_key="k", llm_model="other")
-    assert get_llm_client()._model == "other"
+    selected = get_llm_client()
+    assert isinstance(selected, GeminiLLMClient)
+    assert selected._model == "other"
