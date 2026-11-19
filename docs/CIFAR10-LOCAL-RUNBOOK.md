@@ -15,8 +15,11 @@ uv run --locked --group training python scripts/prepare_cifar10.py --parallel-do
 uv run --locked --group training python scripts/prepare_ollama.py
 ```
 
-Python >=3.11. Lock dùng torch 2.7.1 / torchvision 0.22.1, CUDA 12.6 trên Windows/Linux;
+Python >=3.11. Lock dùng torch 2.14.1 / torchvision 0.29.1, CUDA 12.6 trên Windows/Linux;
 macOS dùng wheel mặc định. Backend thường chỉ cần `uv sync --locked`, không cần torch.
+Pin được nâng từ 2.7.1 / 0.22.1 để xử lý các cảnh báo bảo mật của Python dependency audit.
+Các số đo training trong báo cáo ngày 18/11/2026 thuộc phiên bản cũ; nâng dependency
+không đồng nghĩa đã đo lại độ chính xác hoặc hiệu năng GPU.
 Không cài TensorFlow. Kiểm tra GPU bằng forward/backward thực tế, không chỉ `nvidia-smi`.
 Nếu CUDA thiếu, lệnh dừng; `--device cpu` là lựa chọn tường minh, không tự đổi thiết bị.
 

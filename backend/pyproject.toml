@@ -16,8 +16,8 @@ dependencies = [
 
 [dependency-groups]
 training = [
-    "torch==2.7.1",
-    "torchvision==0.22.1",
+    "torch==2.14.1",
+    "torchvision==0.29.1",
     "numpy>=1.26,<3",
     "pillow>=10",
     "psutil>=6",

@@ -538,9 +538,9 @@ Existing CI continues to run lint, tests, type checks, and builds on pull reques
   dependencies; high and critical findings fail the job. Lower severities remain
   visible in the log.
 - These jobs report findings and do not automatically update dependencies.
-  Local verification on 2026-11-19 found 11 advisory entries for the pinned
-  `torch==2.7.1` and one moderate frontend finding. The Python audit is expected to
-  fail until the training dependency is remediated; no advisories are suppressed.
+  Training uses `torch==2.14.1` with `torchvision==0.29.1`, replacing the vulnerable
+  PyTorch 2.7.1 pin. CUDA 12.6 builds are used locally on Windows/Linux; CI runs the
+  matching CPU builds. No advisories are suppressed.
 
 ## Demo
 
