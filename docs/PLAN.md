@@ -354,7 +354,6 @@ Quy tắc:
 │
 ├── README.md                          # Hướng dẫn tổng quan
 ├── CONTRIBUTING.md                    # Quy ước phát triển     
-├── CLAUDE.md                          # Quy ước code cho dự án
 ├── .github/                           # CI, mẫu PR
 │
 ├── backend/                           # ═══ Python FastAPI Backend ═══

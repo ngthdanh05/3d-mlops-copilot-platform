@@ -28,5 +28,7 @@ client_secret*.json
 *.sqlite
 *.sqlite3
 
-# Per-user Claude Code settings
-.claude/settings.local.json
+# Local assistant configuration
+.claude/
+CLAUDE.md
+CLAUDE.local.md

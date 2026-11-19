@@ -221,7 +221,6 @@ LLM chọn bằng `LLM_PROVIDER`: **Ollama** cho local, **fake** cho test/demo, 
 3d-mlops-copilot-platform/
 ├── README.md
 ├── CONTRIBUTING.md               # Quy ước branch, commit, kiểm tra và code
-├── CLAUDE.md                     # Quy ước code cho dự án
 ├── .github/
 │   ├── workflows/ci.yml          # CI: lint + test cho mỗi PR
 │   └── pull_request_template.md  # Mẫu PR
@@ -576,4 +575,4 @@ Chi tiết từng task: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Quy ước phát triển
 
-Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy ước branch, commit và code, và [`CLAUDE.md`](CLAUDE.md) cho các lệnh build/test.
+Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy ước branch, commit, code và các lệnh chạy, build/test.

@@ -18,6 +18,25 @@ cd frontend
 pnpm install
 ```
 
+## Chạy cục bộ
+
+Backend:
+
+```bash
+cd backend
+uv run uvicorn app.main:app --reload
+```
+
+Frontend (trong terminal khác):
+
+```bash
+cd frontend
+pnpm dev
+```
+
+Các lệnh kiểm thử và build nằm trong mục kiểm tra bên dưới. Quy ước kiến trúc và bảo mật
+áp dụng cho mọi công cụ phát triển; API key của LLM chỉ nằm ở backend.
+
 ## Quy trình một thay đổi
 
 1. Tạo nhánh mới từ `main`, ví dụ `feat/bieu-do-epoch` hoặc `fix/thang-mau`.
