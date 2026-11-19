@@ -114,6 +114,8 @@ def running_backend(db_url: str, log_dir: Path, *, real_llm: bool = False) -> It
     env = {"DATABASE_URL": db_url}
     if not real_llm:
         env["LLM_API_KEY"] = ""
+        env["LLM_PROVIDER"] = "fake"
+        env["OFFLINE"] = "true"
     command = [
         str(find_python()),
         "-m",

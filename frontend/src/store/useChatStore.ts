@@ -5,6 +5,8 @@ import type { ChatMessage } from '../lib/types'
 const MAX_SAVED_MESSAGES = 100
 
 interface ChatState {
+  saveHistory: boolean
+  setSaveHistory: (enabled: boolean) => void
   messages: ChatMessage[]
   /** The answer being written. Non-null means the chat is busy. */
   streamingMessageId: string | null
@@ -33,6 +35,8 @@ const MESSAGES_PER_EXCHANGE = 2
 export const useChatStore = create<ChatState>()(
   persist(
     (set) => ({
+      saveHistory: true,
+      setSaveHistory: (saveHistory) => set({ saveHistory }),
       messages: [],
       streamingMessageId: null,
       suggestions: [],
@@ -58,9 +62,10 @@ export const useChatStore = create<ChatState>()(
       version: 1,
       // An unfinished answer is left out: after a refresh nothing would ever complete it.
       partialize: (state) => ({
-        messages: state.messages
+        saveHistory: state.saveHistory,
+        messages: state.saveHistory ? state.messages
           .filter((message) => message.id !== state.streamingMessageId)
-          .slice(-MAX_SAVED_MESSAGES),
+          .slice(-MAX_SAVED_MESSAGES) : [],
       }),
     },
   ),

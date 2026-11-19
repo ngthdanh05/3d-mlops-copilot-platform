@@ -121,6 +121,14 @@ async def find_best_runs(
 async def update_run(db: AsyncSession, run_id: int, data: RunUpdate) -> Run:
     run = await get_run(db, run_id)
 
+    if data.artifacts is not None:
+        run.hyperparams = {**run.hyperparams, "artifacts": data.artifacts.model_dump()}
+    if data.target_epochs is not None:
+        last_epoch = await db.scalar(select(func.max(Metric.epoch)).where(Metric.run_id == run_id))
+        if last_epoch is not None and data.target_epochs < last_epoch:
+            raise ConflictError("Target epochs cannot be less than the last logged epoch")
+        run.hyperparams = {**run.hyperparams, "epochs": data.target_epochs}
+
     if data.status is not None:
         run.status = data.status
         if data.status is RunStatus.RUNNING:

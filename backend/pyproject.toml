@@ -11,9 +11,17 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "google-genai>=3,<4",
+    "httpx>=0.27",
 ]
 
 [dependency-groups]
+training = [
+    "torch==2.7.1",
+    "torchvision==0.22.1",
+    "numpy>=1.26,<3",
+    "pillow>=10",
+    "psutil>=6",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -25,6 +33,15 @@ dev = [
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cu126", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

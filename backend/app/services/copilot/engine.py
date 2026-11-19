@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from typing import Any
 
 from pydantic import ValidationError
@@ -17,9 +18,12 @@ from app.schemas.copilot import (
     TextResetEvent,
 )
 from app.services import tracking
+from app.services.copilot.grounded import CANONICAL_TOOLS, render_grounded
 from app.services.copilot.llm_client import (
     LLMClient,
+    LLMContextError,
     LLMError,
+    LLMLocalError,
     LLMMessage,
     LLMRateLimitError,
     LLMReply,
@@ -53,7 +57,9 @@ _TOO_MANY_ROUNDS_MESSAGE = "Câu hỏi này cần quá nhiều bước tra cứu
 _WORD = re.compile(r"[\w.-]+")
 
 
-async def _named_runs_note(db: AsyncSession, request: ChatRequest) -> LLMMessage | None:
+async def _named_runs_note(
+    db: AsyncSession, request: ChatRequest, ambiguous_names: list[str] | None = None
+) -> LLMMessage | None:
     """The run_id of runs the question names, which saves the model a lookup round."""
     words = [word.strip(".-") for word in _WORD.findall(request.message)]
     try:
@@ -62,6 +68,12 @@ async def _named_runs_note(db: AsyncSession, request: ChatRequest) -> LLMMessage
         return None
     if not runs:
         return None
+    if ambiguous_names is not None:
+        for name in sorted({run.run_name.casefold() for run in runs}):
+            matches = [run for run in runs if run.run_name.casefold() == name]
+            if len(matches) > 1:
+                experiments = ", ".join(str(run.experiment_id) for run in matches)
+                ambiguous_names.append(f"{matches[0].run_name} (experiment {experiments})")
     listed = ", ".join(
         f"{run.run_name} is run_id {run.id} in experiment {run.experiment_id}" for run in runs
     )
@@ -93,9 +105,19 @@ async def answer_events(
     """Run the loop, yielding answer text as it arrives. Always ends with one `DoneEvent`."""
     context = ToolContext(db=db, experiment_id=request.experiment_id)
     messages = [LLMMessage(role="user", content=request.message)]
-    if note := await _named_runs_note(db, request):
+    ground = getattr(llm, "ground_tool_results", False)
+    ambiguous_names = []
+    if note := await _named_runs_note(db, request, ambiguous_names):
         messages.append(note)
+    if ground and ambiguous_names:
+        yield DoneEvent(
+            message="Tên run trùng ở nhiều experiment: "
+            + "; ".join(ambiguous_names)
+            + ". Hãy chọn experiment cần xem trước khi đánh giá."
+        )
+        return
     nudged = False
+    grounded_result = None
 
     try:
         for _ in range(MAX_TOOL_ROUNDS):
@@ -104,16 +126,21 @@ async def answer_events(
                 async for item in llm.stream(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS):
                     if isinstance(item, LLMReply):
                         reply = item
-                    else:
+                    elif not (ground and grounded_result):
                         yield TextDeltaEvent(text=item)
             else:
                 reply = await llm.complete(SYSTEM_PROMPT, messages, _TOOL_DEFINITIONS)
 
             if not reply.tool_calls:
                 if reply.text or nudged:
-                    yield DoneEvent(
-                        message=reply.text or _EMPTY_REPLY_MESSAGE, actions=context.final_actions
+                    text = (
+                        render_grounded(*grounded_result, request.message)
+                        if ground and grounded_result
+                        else reply.text or _EMPTY_REPLY_MESSAGE
                     )
+                    if ground and grounded_result and stream_text:
+                        yield TextDeltaEvent(text=text)
+                    yield DoneEvent(message=text, actions=context.final_actions)
                     return
                 # Models sometimes stop silently after their last tool call.
                 nudged = True
@@ -133,6 +160,10 @@ async def answer_events(
             )
             for call in reply.tool_calls:
                 result = await _run_tool(call, context)
+                if "error" in result:
+                    grounded_result = None
+                elif call.name in CANONICAL_TOOLS:
+                    grounded_result = (call.name, result)
                 messages.append(
                     LLMMessage(
                         role="tool",
@@ -141,6 +172,18 @@ async def answer_events(
                         content=json.dumps(result, ensure_ascii=False),
                     )
                 )
+    except LLMContextError:
+        yield DoneEvent(
+            message="Dữ liệu vượt giới hạn context local. Hãy hỏi ít run hoặc epoch hơn."
+        )
+        return
+    except LLMLocalError:
+        logger.exception("Local LLM call failed")
+        yield DoneEvent(
+            message="Ollama chưa sẵn sàng hoặc phản hồi không hợp lệ. "
+            "Hãy kiểm tra runtime và model đã tải local."
+        )
+        return
     except LLMRateLimitError:
         logger.warning("LLM quota exceeded")
         yield DoneEvent(message=_RATE_LIMIT_MESSAGE, actions=context.final_actions)
@@ -149,12 +192,19 @@ async def answer_events(
         logger.exception("LLM call failed")
         yield DoneEvent(message=_LLM_ERROR_MESSAGE)
         return
+    finally:
+        if release := getattr(llm, "release", None):
+            try:
+                await release()
+            except Exception:
+                logger.warning("Could not release local model; runtime keep-alive will expire")
 
     yield DoneEvent(message=_TOO_MANY_ROUNDS_MESSAGE, actions=context.final_actions)
 
 
 async def answer(db: AsyncSession, llm: LLMClient, request: ChatRequest) -> ChatResponse:
-    async for event in answer_events(db, llm, request, stream_text=False):
-        if isinstance(event, DoneEvent):
-            return ChatResponse(message=event.message, actions=event.actions)
+    async with aclosing(answer_events(db, llm, request, stream_text=False)) as events:
+        async for event in events:
+            if isinstance(event, DoneEvent):
+                return ChatResponse(message=event.message, actions=event.actions)
     raise RuntimeError("The copilot loop ended without an answer")

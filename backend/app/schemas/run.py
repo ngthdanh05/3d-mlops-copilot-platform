@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Annotated
 from pydantic import AfterValidator, Field, JsonValue, model_validator
 
 from app.models.run import RunStatus
+from app.schemas.artifact import ArtifactMetadata
 from app.schemas.base import DatabaseId, InputSchema, ORMSchema, UTCDateTime
 from app.schemas.metric import MetricRead
 
@@ -17,6 +18,8 @@ _POSITIVE_INT_KEYS = ("epochs", "batch_size")
 
 
 def _validate_hyperparams(params: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    if params.get("artifacts") is not None:
+        ArtifactMetadata.model_validate(params["artifacts"])
     errors: list[str] = []
     for key, value in params.items():
         if not key.strip():
@@ -54,10 +57,17 @@ class RunUpdate(InputSchema):
 
     status: RunStatus | None = None
     finished_at: UTCDateTime | None = None
+    artifacts: ArtifactMetadata | None = None
+    target_epochs: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def _check(self) -> RunUpdate:
-        if self.status is None and self.finished_at is None:
+        if (
+            self.status is None
+            and self.finished_at is None
+            and self.artifacts is None
+            and self.target_epochs is None
+        ):
             raise ValueError("at least one of 'status' or 'finished_at' must be provided")
         if self.status is RunStatus.RUNNING and self.finished_at is not None:
             raise ValueError("'finished_at' cannot be set while status is 'running'")
@@ -72,6 +82,7 @@ class RunRead(ORMSchema):
     hyperparams: dict[str, JsonValue]
     created_at: UTCDateTime
     finished_at: UTCDateTime | None
+    artifacts: ArtifactMetadata | None = None
 
 
 class RunSummary(RunRead):

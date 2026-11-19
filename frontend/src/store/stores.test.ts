@@ -152,7 +152,7 @@ describe('useChatStore', () => {
     chat.setStreamingMessageId('answer')
     chat.setSuggestions(['anything'])
 
-    expect(saved().state).toEqual({ messages: [message('question')] })
+    expect(saved().state).toEqual({ saveHistory: true, messages: [message('question')] })
   })
 
   it('saves only the most recent messages', () => {
@@ -161,6 +161,18 @@ describe('useChatStore', () => {
     const { messages } = saved().state
     expect(messages).toHaveLength(100)
     expect(messages[0].id).toBe('m5')
+  })
+
+  it('removes persisted messages when saving is disabled and keeps the choice after reload', async () => {
+    const chat = useChatStore.getState()
+    chat.addMessage(message('private'))
+    chat.setSaveHistory(false)
+    chat.addMessage(message('private-too'))
+    expect(saved().state.messages).toEqual([])
+    expect(useChatStore.getState().messages).toHaveLength(2)
+    await useChatStore.persist.rehydrate()
+    expect(useChatStore.getState().saveHistory).toBe(false)
+    expect(useChatStore.getState().messages).toEqual([])
   })
 
   it('restores the saved history', async () => {

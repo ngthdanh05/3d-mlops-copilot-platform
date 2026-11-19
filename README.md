@@ -2,6 +2,12 @@
 
 > Nền tảng quản lý thực nghiệm học máy (ML experiment tracking) trong **không gian 3D**, tích hợp **trợ lý AI** giúp bạn tìm, so sánh và chẩn đoán các lần huấn luyện mô hình.
 
+Huấn luyện CIFAR-10 thật, checkpoint/resume, prediction và copilot Ollama local:
+[hướng dẫn Windows/offline](docs/CIFAR10-LOCAL-RUNBOOK.md),
+[báo cáo kiểm thử và benchmark](docs/CIFAR10-IMPLEMENTATION-REPORT.md).
+
+Để hiểu code qua từng chặng: [sơ đồ luồng dữ liệu và bài thực hành test từ đầu đến cuối](docs/DATA-FLOW-AND-TEST-WALKTHROUGH.md).
+
 [![CI](https://github.com/ngthdanh05/3d-mlops-copilot-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ngthdanh05/3d-mlops-copilot-platform/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)
@@ -58,7 +64,8 @@ Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đ�
 ### ✅ Đã có
 
 - Không gian 3D tương tác: xoay, zoom, click, hover, camera bay tới run, chọn trục, câu kết luận tính từ dữ liệu, Inspector Panel, instanced mesh khi có trên 100 run.
-- Trợ lý AI dùng Gemini: tìm run tốt nhất, so sánh run, chẩn đoán overfitting, làm nổi bật và bay camera tới các run liên quan. Câu trả lời hiện dần theo luồng và lịch sử chat được giữ lại.
+- Trợ lý AI chọn tường minh Ollama local, fake hoặc Gemini cloud: tìm/so sánh run, chẩn đoán dấu hiệu overfitting và điều khiển giao diện. Có tùy chọn không lưu lịch sử chat.
+- Pipeline CIFAR-10 bằng PyTorch: chuẩn bị dữ liệu, split cố định, CNN/ResNet-18, metrics thật, checkpoint/resume, evaluation và prediction CLI. UI polling và đường cong học từ dữ liệu thực.
 - Sidebar lọc run theo trạng thái, accuracy và tên. Ba khung luôn đồng bộ.
 
 - REST API để tạo, xem, xoá **experiment**, **run** và ghi **metrics theo từng epoch**.
@@ -155,7 +162,7 @@ Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số 
 ## Thiết kế trợ lý AI
 
 > [!NOTE]
-> Đã có vòng lặp tool calling, kết nối Gemini, 6 tool truy vấn, 3 tool điều khiển giao diện và khung chat. Khi chưa đặt `LLM_API_KEY`, backend dùng **LLM giả lập**: câu trả lời có tiền tố `[LLM giả lập]` và chỉ hiểu câu hỏi tìm run tốt nhất.
+> Có vòng lặp tool calling, Ollama/Gemini, 6 tool truy vấn, 3 tool UI và khung chat. Mặc định `LLM_PROVIDER=fake`: có tiền tố `[LLM giả lập]`, chỉ hiểu tìm best run. Dùng `ollama` cho AI local; API key cũ không tự chọn cloud.
 
 Trợ lý dùng **tool calling (function calling)**: LLM **không** được nhận toàn bộ dữ liệu trong prompt và **không** tự đưa ra số liệu. Mọi con số phải lấy qua công cụ. Cách này tránh việc AI bịa số và vẫn chạy được khi có hàng trăm run.
 
@@ -190,7 +197,7 @@ Ví dụ phản hồi của `/api/copilot/chat`:
 }
 ```
 
-Nhà cung cấp LLM: **Gemini**, mặc định model `gemini-3.5-flash-lite` trên gói miễn phí. Mọi chi tiết của nhà cung cấp nằm trong `backend/app/services/copilot/llm_client.py`.
+LLM chọn bằng `LLM_PROVIDER`: **Ollama** cho local, **fake** cho test/demo, **Gemini** khi chủ động cho phép cloud (`OFFLINE=false`). Adapter nằm trong `backend/app/services/copilot/`; không fallback giữa providers.
 
 > [!WARNING]
 > Google dùng nội dung gửi qua gói miễn phí để cải thiện sản phẩm. Không đưa dữ liệu nhạy cảm vào hyperparams, tên run hay câu hỏi khi dùng gói này.
@@ -203,7 +210,7 @@ Nhà cung cấp LLM: **Gemini**, mặc định model `gemini-3.5-flash-lite` tr�
 |---|---|
 | **Backend** | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2 (async) + aiosqlite, SQLite (chế độ WAL) |
 | **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, React Three Fiber + drei, Zustand |
-| **AI** | Gemini qua SDK `google-genai`, dùng tool calling, gọi qua backend |
+| **AI** | Ollama local qua HTTP; fake cho test, Gemini qua SDK khi opt-in; tool calling qua backend |
 | **Công cụ** | uv (quản lý gói Python), pnpm, Ruff, pytest + pytest-cov, Vitest, Playwright, GitHub Actions |
 
 ---
@@ -465,8 +472,12 @@ with TrackingClient("http://localhost:8000") as client:
 | `DEBUG` | `false` | In câu lệnh SQL ra console |
 | `DATABASE_URL` | file `backend/mlops.db` | Chuỗi kết nối, ví dụ `sqlite+aiosqlite:///./mlops.db` |
 | `CORS_ORIGINS` | `localhost:5173`, `localhost:3000` | Các địa chỉ frontend được phép gọi API (dạng JSON list) |
-| `LLM_API_KEY` | — | API key Gemini, lấy tại [AI Studio](https://aistudio.google.com/apikey). Chỉ dùng ở backend. Để trống thì dùng LLM giả lập |
-| `LLM_MODEL` | `gemini-3.5-flash-lite` | Tên model Gemini |
+| `LLM_PROVIDER` | `fake` | `fake`, `ollama`, hoặc `gemini`; không tự fallback |
+| `OFFLINE` | `true` | Từ chối Gemini khi offline |
+| `LLM_BASE_URL` | `http://127.0.0.1:11434` | Ollama, chỉ chấp nhận HTTP loopback |
+| `LLM_API_KEY` | — | Chỉ dùng khi chủ động chọn Gemini cloud |
+| `LLM_MODEL` | — | Ollama cần model đã cache, đã thử `qwen3:4b-instruct-2507-q4_K_M`; Gemini để trống dùng model mặc định |
+| `LLM_TIMEOUT` / `LLM_CONTEXT` | `120` / `12288` | Timeout giây và context budget local |
 
 > [!CAUTION]
 > Không commit file `.env` (đã có trong `.gitignore`).
@@ -511,6 +522,25 @@ uv run python scripts/benchmark.py --real-llm     # đo FPS, API, AI và ghi doc
 | `frontend` | `lint`, `typecheck`, `test:coverage`, `build` (tự bỏ qua khi chưa có `frontend/package.json`) |
 
 ---
+
+## Automated security audit
+
+[`Security audit`](.github/workflows/security-audit.yml) runs on pull requests into
+`main`, pushes to `main`, every Monday at 02:00 UTC (09:00 Asia/Bangkok), and manual
+dispatch. The scheduled trigger starts after the workflow is merged into `main`.
+Existing CI continues to run lint, tests, type checks, and builds on pull requests.
+
+- Python: `pip-audit` checks the locked runtime, development, and training
+  dependencies. CUDA suffixes on torch/torchvision versions are removed only in the
+  temporary audit input to match upstream PyPI advisories; the lockfile is unchanged.
+  Any known vulnerability or unauditable package fails the job.
+- Frontend: `pnpm audit --audit-level high` checks production and development
+  dependencies; high and critical findings fail the job. Lower severities remain
+  visible in the log.
+- These jobs report findings and do not automatically update dependencies.
+  Local verification on 2026-11-19 found 11 advisory entries for the pinned
+  `torch==2.7.1` and one moderate frontend finding. The Python audit is expected to
+  fail until the training dependency is remediated; no advisories are suppressed.
 
 ## Demo
 

@@ -4,7 +4,7 @@ import { fetchExperiments, fetchRuns } from '../lib/api'
 import { useRunStore } from '../store/useRunStore'
 
 /** The user retries with a button, so SWR need not keep hitting a server that is down. */
-const SWR_OPTIONS = { shouldRetryOnError: false }
+const SWR_OPTIONS = { shouldRetryOnError: false, refreshWhenOffline: true }
 
 /** 1: fetching experiments, 2: fetching runs. */
 export type LoadStep = 1 | 2
@@ -23,7 +23,8 @@ export function useRuns() {
   const runs = useSWR(
     selectedExperimentId === null ? null : ['runs', selectedExperimentId],
     () => fetchRuns(selectedExperimentId as number),
-    SWR_OPTIONS,
+    { ...SWR_OPTIONS, refreshWhenHidden: false,
+      refreshInterval: (data) => data?.some((run) => run.status === 'running') ? 4000 : 0 },
   )
 
   useEffect(() => {

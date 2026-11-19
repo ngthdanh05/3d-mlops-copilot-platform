@@ -16,7 +16,7 @@ export function Workspace() {
 
   return (
     <div className="flex h-dvh flex-col bg-slate-950 text-slate-100">
-      <TopBar />
+      <TopBar onRefresh={retry} />
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         <Sidebar isLoading={isLoading} />
         <main className="min-h-[50vh] min-w-0 flex-1 lg:min-h-0">
