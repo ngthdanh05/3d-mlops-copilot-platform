@@ -1,578 +1,301 @@
 # 3D-MLOps Copilot Platform
 
-> Nền tảng quản lý thực nghiệm học máy (ML experiment tracking) trong **không gian 3D**, tích hợp **trợ lý AI** giúp bạn tìm, so sánh và chẩn đoán các lần huấn luyện mô hình.
-
-Huấn luyện CIFAR-10 thật, checkpoint/resume, prediction và copilot Ollama local:
-[hướng dẫn Windows/offline](docs/CIFAR10-LOCAL-RUNBOOK.md),
-[báo cáo kiểm thử và benchmark](docs/CIFAR10-IMPLEMENTATION-REPORT.md).
-
-Để hiểu code qua từng chặng: [sơ đồ luồng dữ liệu và bài thực hành test từ đầu đến cuối](docs/DATA-FLOW-AND-TEST-WALKTHROUGH.md).
+**Theo dõi thực nghiệm học máy, khám phá kết quả trong không gian 3D và trao đổi với trợ lý AI.**
 
 [![CI](https://github.com/ngthdanh05/3d-mlops-copilot-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/ngthdanh05/3d-mlops-copilot-platform/actions/workflows/ci.yml)
+[![Security audit](https://github.com/ngthdanh05/3d-mlops-copilot-platform/actions/workflows/security-audit.yml/badge.svg)](https://github.com/ngthdanh05/3d-mlops-copilot-platform/actions/workflows/security-audit.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-async-003B57?logo=sqlite&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
-![Three.js](https://img.shields.io/badge/React_Three_Fiber-3D-000000?logo=three.js&logoColor=white)
-![Status](https://img.shields.io/badge/trạng_thái-PoC-orange)
+![Status](https://img.shields.io/badge/Status-PoC-orange)
 
----
+3D-MLOps Copilot kết nối script huấn luyện, API tracking và dashboard trong một luồng làm việc trên máy cá nhân. Mỗi lần huấn luyện (*run*) được biểu diễn bằng một điểm 3D; bạn có thể xem siêu tham số, theo dõi đường cong học, so sánh kết quả và hỏi AI về dữ liệu đã ghi nhận.
+
+![Dashboard 3D với danh sách thực nghiệm, chi tiết run và trợ lý AI](docs/screenshots/01-overview.png)
+
+[Bắt đầu nhanh](#bắt-đầu-nhanh) · [CIFAR-10 và AI local](docs/CIFAR10-LOCAL-RUNBOOK.md) · [Luồng dữ liệu](docs/DATA-FLOW-AND-TEST-WALKTHROUGH.md) · [Đóng góp](CONTRIBUTING.md)
 
 ## Mục lục
 
-- [Dự án này làm gì?](#dự-án-này-làm-gì)
 - [Tính năng](#tính-năng)
-- [Kiến trúc](#kiến-trúc)
-- [Thiết kế không gian 3D](#thiết-kế-không-gian-3d)
-- [Thiết kế trợ lý AI](#thiết-kế-trợ-lý-ai)
-- [Công nghệ sử dụng](#công-nghệ-sử-dụng)
-- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
 - [Bắt đầu nhanh](#bắt-đầu-nhanh)
-- [Tạo dữ liệu mẫu](#tạo-dữ-liệu-mẫu)
-- [Tài liệu API](#tài-liệu-api)
-- [Ghi log từ script huấn luyện của bạn](#ghi-log-từ-script-huấn-luyện-của-bạn)
+- [Sử dụng](#sử-dụng)
 - [Cấu hình](#cấu-hình)
-- [Kiểm thử](#kiểm-thử)
-- [Demo](#demo)
-- [Lộ trình phát triển](#lộ-trình-phát-triển)
-- [Giới hạn của bản PoC](#giới-hạn-của-bản-poc)
-- [Quy ước phát triển](#quy-ước-phát-triển)
-
----
-
-## Dự án này làm gì?
-
-Khi huấn luyện mô hình học máy, ta thường chạy **rất nhiều lần** (gọi là các *run*) với các bộ siêu tham số khác nhau: learning rate, batch size, số epoch... Theo dõi xem run nào tốt nhất, run nào bị overfit, run nào bị lỗi trong một bảng số liệu dài là việc mệt mỏi. Bảng số liệu cũng khó cho thấy **vì sao** một run tốt hơn, hay **vùng siêu tham số nào chưa được thử**.
-
-**3D-MLOps Copilot** giải quyết việc đó bằng ba thành phần:
-
-| | Thành phần | Ý nghĩa |
-|---|---|---|
-| 📊 | **Theo dõi (Track)** | Mỗi run gửi siêu tham số và chỉ số từng epoch (accuracy, loss, val_accuracy, val_loss) về một REST API, lưu vào SQLite. |
-| 🌐 | **Trực quan hoá 3D (Visualize)** | Mỗi run là một quả cầu trong **không gian siêu tham số 3D**: vị trí cho biết run được cấu hình thế nào, màu và kích thước cho biết kết quả. Người dùng thấy ngay vùng nào cho kết quả tốt và vùng nào còn trống. Xem [Thiết kế không gian 3D](#thiết-kế-không-gian-3d). |
-| 🤖 | **Trợ lý AI (Converse)** | Hỏi bằng ngôn ngữ tự nhiên: *"Run nào có accuracy cao nhất?"*, *"Run-002 có bị overfit không?"*. AI lấy số liệu qua các công cụ (tool) của backend rồi trả lời, đồng thời **làm nổi bật và bay camera tới** các run liên quan. |
-
-Ba khung giao diện (không gian 3D, bảng chi tiết, khung chat) luôn **đồng bộ trạng thái** với nhau.
-
-> [!NOTE]
-> Đây là bản **Proof of Concept (PoC)**, chạy trên máy cá nhân (localhost), một người dùng. Luồng đầy đủ từ huấn luyện, ghi log, xem 3D đến hỏi AI đã chạy được. Xem [Lộ trình](#lộ-trình-phát-triển).
-
----
+- [Kiến trúc](#kiến-trúc)
+- [Tài liệu API](#tài-liệu-api)
+- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [Kiểm thử và CI](#kiểm-thử-và-ci)
+- [Tài liệu dự án](#tài-liệu-dự-án)
+- [Phạm vi và giới hạn](#phạm-vi-và-giới-hạn)
+- [Đóng góp](#đóng-góp)
 
 ## Tính năng
 
-### ✅ Đã có
-
-- Không gian 3D tương tác: xoay, zoom, click, hover, camera bay tới run, chọn trục, câu kết luận tính từ dữ liệu, Inspector Panel, instanced mesh khi có trên 100 run.
-- Trợ lý AI chọn tường minh Ollama local, fake hoặc Gemini cloud: tìm/so sánh run, chẩn đoán dấu hiệu overfitting và điều khiển giao diện. Có tùy chọn không lưu lịch sử chat.
-- Pipeline CIFAR-10 bằng PyTorch: chuẩn bị dữ liệu, split cố định, CNN/ResNet-18, metrics thật, checkpoint/resume, evaluation và prediction CLI. UI polling và đường cong học từ dữ liệu thực.
-- Sidebar lọc run theo trạng thái, accuracy và tên. Ba khung luôn đồng bộ.
-
-- REST API để tạo, xem, xoá **experiment**, **run** và ghi **metrics theo từng epoch**.
-- Kiểm tra dữ liệu chặt chẽ: `learning_rate > 0`, `0 ≤ accuracy ≤ 1`, `loss ≥ 0`, `epoch ≥ 1`, không nhận NaN/vô cực, không nhận field lạ.
-- Danh sách run kèm **chỉ số của epoch cuối** (`final_accuracy`, `final_loss`, ...), sẵn sàng để vẽ lên không gian 3D.
-- Mã lỗi HTTP rõ ràng: `201` tạo mới · `404` không tìm thấy · `409` trùng lặp · `422` dữ liệu sai.
-- **Script huấn luyện demo** (scikit-learn) tự ghi log lên API.
-- **Công cụ sinh dữ liệu giả lập** với đường cong học tập thực tế (có run tốt, run overfit, run lỗi, run đang chạy).
-- Swagger UI tự động tại `/docs`.
-- Kiểm thử tự động cho backend và frontend, smoke test end-to-end trên trình duyệt thật, [số đo hiệu năng](docs/performance.md). CI tự chạy test và lint cho mỗi Pull Request.
-
-### 🚧 Sắp có
-
-| Tính năng | Phase | Ưu tiên |
-|---|---|---|
-| Inspector Panel: biểu đồ accuracy/loss theo epoch | 2 | Must |
-| Giao diện xem run của nhiều experiment cùng lúc (API đã hỗ trợ) | 2 | Should |
-| Tự cập nhật run đang chạy (polling) | 4 | Should |
-| Chế độ giảm chiều (PCA) khi có nhiều hơn 3 siêu tham số | 4 | Could |
-| Đóng gói client ghi log thành thư viện `pip install` | 4 | Could |
-
----
-
-## Kiến trúc
-
-```
-┌──────────────────────────── Trình duyệt (React + Vite) ────────────────────────────┐
-│   Không gian 3D (R3F)  │   Inspector Panel   │   Khung chat AI                     │
-│                Zustand store — nguồn trạng thái duy nhất, đồng bộ 3 khung          │
-└───────────────────────────────────────┬────────────────────────────────────────────┘
-                                        │ HTTP / REST (/api/...)
-┌───────────────────────────────────────▼────────────────────────────────────────────┐
-│                               Backend (FastAPI)                                    │
-│  /api/experiments   /api/runs   /api/runs/{id}/metrics   /api/copilot/chat (P3)    │
-│              │                                              │                      │
-│      Service layer (tracking)  ◄──── tool calls ────  AI Copilot Engine (P3)       │
-│              │                                              │                      │
-│      SQLite (experiments · runs · metrics)                  └──► LLM API           │
-└────────────────────────────────────────────────────────────────────────────────────┘
-        ▲
-        │ POST /api/runs, /metrics
-  Script huấn luyện của bạn
-```
-
-**Luồng dữ liệu chính:** script huấn luyện → gửi metrics lên API → lưu SQLite → frontend lấy danh sách run → vẽ thành các node 3D → người dùng click node hoặc hỏi AI → giao diện cập nhật.
-
-> [!IMPORTANT]
-> **API key của LLM không bao giờ nằm ở frontend.** Mọi lời gọi AI đều đi qua backend (`/api/copilot/chat`).
-
-### Mô hình dữ liệu
-
-```
-experiments 1 ──── N runs 1 ──── N metrics
-─────────────        ─────────────────        ──────────────────
-id                   id                       id
-name (duy nhất)      experiment_id  (FK)      run_id (FK)
-description          run_name                 epoch          (≥ 1, duy nhất trong run)
-created_at           status: running |        accuracy       (0–1)
-                       completed | failed     loss           (≥ 0)
-                     hyperparams (JSON)       val_accuracy   (0–1, tuỳ chọn)
-                     created_at               val_loss       (≥ 0, tuỳ chọn)
-                     finished_at              logged_at
-```
-
-Ở tầng database, xoá một experiment sẽ xoá luôn các run và metrics của nó (cascade). API xoá dùng đúng cơ chế này.
-
----
-
-## Thiết kế không gian 3D
-
-> [!NOTE]
-> Toàn bộ thiết kế dưới đây **đã được cài đặt**, gồm cả instanced mesh.
-
-Mục tiêu của không gian 3D là trả lời hai câu hỏi mà bảng số liệu khó trả lời: *run tốt nằm ở vùng cấu hình nào?* và *vùng nào chưa được thử?* Vì vậy **vị trí thể hiện đầu vào (siêu tham số), còn hình thức thể hiện kết quả**.
-
-| Kênh hiển thị | Mặc định | Ghi chú |
-|---|---|---|
-| Trục X | `learning_rate` | **Thang log** (giá trị thường trải từ 1e-5 đến 1e-1) |
-| Trục Y | `batch_size` | Thang log cơ số 2 |
-| Trục Z | Siêu tham số dạng số còn lại: ưu tiên `dropout`, rồi `epochs`, rồi các key khác | Lấy key đầu tiên có ≥ 2 giá trị khác nhau. Không có key nào thì Z phẳng |
-| Màu | `final_val_accuracy` (hoặc `final_accuracy` nếu không có) | Thang màu liên tục, có chú giải. Miền giá trị lấy từ các run hoàn thành và bỏ giá trị ngoại lai ở phía thấp, để một run phân kỳ không làm các run còn lại cùng màu |
-| Kích thước | `final_val_loss` | Loss cao → cầu nhỏ |
-| Viền / icon | Trạng thái | ● hoàn thành · ◐ đang chạy · ✕ lỗi |
-
-- Đầu đồ thị luôn có một câu kết luận tính từ dữ liệu. Run đang chọn hoặc được AI làm nổi bật có nhãn, đường gióng xuống trục, và các run còn lại mờ đi.
-- Người dùng **chọn được trục** từ mọi key **dạng số** trong `hyperparams` và mọi metric cuối.
-- Key không phải số (`optimizer` là chuỗi, `hidden_layers` là danh sách) chưa làm trục được ở PoC, nhưng vẫn hiện trong Inspector Panel.
-- Run thiếu một siêu tham số đang dùng làm trục được đặt ở mặt phẳng "không xác định" và vẽ mờ.
-- Không dùng epoch, accuracy và loss làm 3 trục cùng lúc: accuracy và loss gần như tỉ lệ nghịch nên các điểm sẽ dồn trên một đường, còn số epoch thường giống nhau giữa các run.
-- Hiệu năng: ≥ 200 node ở 60 fps (dùng instanced mesh). Số đo ở [`docs/performance.md`](docs/performance.md).
-
----
-
-## Thiết kế trợ lý AI
-
-> [!NOTE]
-> Có vòng lặp tool calling, Ollama/Gemini, 6 tool truy vấn, 3 tool UI và khung chat. Mặc định `LLM_PROVIDER=fake`: có tiền tố `[LLM giả lập]`, chỉ hiểu tìm best run. Dùng `ollama` cho AI local; API key cũ không tự chọn cloud.
-
-Trợ lý dùng **tool calling (function calling)**: LLM **không** được nhận toàn bộ dữ liệu trong prompt và **không** tự đưa ra số liệu. Mọi con số phải lấy qua công cụ. Cách này tránh việc AI bịa số và vẫn chạy được khi có hàng trăm run.
-
-**Công cụ truy vấn** (chạy ở backend, gọi service layer):
-
-| Tool | Chức năng |
+| Nhóm | Khả năng hiện có |
 |---|---|
-| `list_experiments()` | Danh sách experiment |
-| `find_best_runs(experiment_id, metric, top_k)` | Các run tốt nhất theo một metric |
-| `find_runs_by_name(run_names, experiment_id)` | Tìm `run_id` từ tên run người dùng nhắc tới, không phân biệt hoa thường |
-| `get_run(run_id)` | Siêu tham số + metrics từng epoch của một run |
-| `compare_runs(run_ids)` | So sánh siêu tham số và metrics cuối |
-| `detect_overfitting(run_id)` | Phân tích khoảng cách train/val qua các epoch (tính bằng code, không do LLM tự đoán) |
-
-**Công cụ điều khiển giao diện** (backend trả về dưới dạng `actions`, frontend thực thi qua Zustand store). Khi trả lời về run tốt nhất, so sánh hay chẩn đoán, backend tự thêm các action này để bớt một vòng gọi LLM, nên AI chỉ gọi các tool dưới đây khi người dùng yêu cầu hiển thị run khác:
-
-| Tool | Chức năng |
-|---|---|
-| `highlight_runs(run_ids)` | Làm nổi bật các run |
-| `focus_camera(run_id)` | Bay camera tới một run |
-| `open_inspector(run_id)` | Mở bảng chi tiết |
-
-Ví dụ phản hồi của `/api/copilot/chat`:
-
-```json
-{
-  "message": "Run-007 có val_accuracy cao nhất (0.9644)...",
-  "actions": [
-    { "type": "highlight_runs", "run_ids": [7] },
-    { "type": "focus_camera", "run_id": 7 }
-  ]
-}
-```
-
-LLM chọn bằng `LLM_PROVIDER`: **Ollama** cho local, **fake** cho test/demo, **Gemini** khi chủ động cho phép cloud (`OFFLINE=false`). Adapter nằm trong `backend/app/services/copilot/`; không fallback giữa providers.
-
-> [!WARNING]
-> Google dùng nội dung gửi qua gói miễn phí để cải thiện sản phẩm. Không đưa dữ liệu nhạy cảm vào hyperparams, tên run hay câu hỏi khi dùng gói này.
-
----
-
-## Công nghệ sử dụng
-
-| Phần | Công nghệ |
-|---|---|
-| **Backend** | Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy 2 (async) + aiosqlite, SQLite (chế độ WAL) |
-| **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, React Three Fiber + drei, Zustand |
-| **AI** | Ollama local qua HTTP; fake cho test, Gemini qua SDK khi opt-in; tool calling qua backend |
-| **Công cụ** | uv (quản lý gói Python), pnpm, Ruff, pytest + pytest-cov, Vitest, Playwright, GitHub Actions |
-
----
-
-## Cấu trúc thư mục
-
-```
-3d-mlops-copilot-platform/
-├── README.md
-├── CONTRIBUTING.md               # Quy ước branch, commit, kiểm tra và code
-├── .github/
-│   ├── workflows/ci.yml          # CI: lint + test cho mỗi PR
-│   └── pull_request_template.md  # Mẫu PR
-├── docs/
-│   ├── PLAN.md                   # Kế hoạch chi tiết & lộ trình
-│   ├── DEMO.md                   # Kịch bản demo
-│   ├── performance.md            # Số đo hiệu năng
-│   └── screenshots/              # Ảnh các luồng chính
-├── frontend/                     # React + R3F (khung 3 panel, store, API client)
-│   └── scripts/                  # Phần chạy trên trình duyệt của smoke test và benchmark
-└── backend/
-    ├── pyproject.toml            # Dependencies & cấu hình pytest/ruff/coverage
-    ├── .env.example              # Mẫu biến môi trường
-    ├── app/
-    │   ├── main.py               # Điểm khởi chạy FastAPI, CORS, đăng ký router
-    │   ├── config.py             # Cấu hình (đọc từ .env)
-    │   ├── database.py           # Engine async, session, tạo bảng
-    │   ├── models/               # ORM: Experiment, Run, Metric
-    │   ├── schemas/              # Pydantic: dữ liệu vào/ra + validation
-    │   ├── routers/              # Các endpoint /api/...
-    │   ├── services/             # Logic nghiệp vụ (tracking.py)
-    │   └── utils/seed_data.py    # Sinh dữ liệu giả lập
-    ├── scripts/
-    │   ├── train_mnist_demo.py   # Script huấn luyện demo
-    │   ├── log_to_api.py         # Client Python để ghi log lên API
-    │   ├── smoke_test.py         # Kiểm tra end-to-end
-    │   └── benchmark.py          # Đo hiệu năng, ghi docs/performance.md
-    └── tests/                    # Bộ kiểm thử pytest
-```
-
----
+| **Experiment tracking** | Quản lý experiment, run, siêu tham số và metrics theo epoch qua REST API; lưu dữ liệu trong SQLite. |
+| **Trực quan hóa 3D** | Chọn trục, xoay/zoom, lọc run, xem chi tiết và đưa camera tới run được chọn. Màu và kích thước phản ánh kết quả huấn luyện. |
+| **Theo dõi huấn luyện** | Hiển thị train/validation accuracy và loss theo epoch; polling mỗi 4 giây khi có run đang chạy và tab đang hiển thị. |
+| **AI Copilot** | Tìm run tốt nhất, so sánh run, phân tích dấu hiệu overfitting bằng công cụ truy vấn; làm nổi bật run và mở bảng chi tiết ngay trong giao diện. |
+| **AI local hoặc cloud** | Ollama cho model local, Gemini khi chủ động bật cloud, provider giả lập cho demo/test. Có tùy chọn tắt lưu lịch sử chat trên trình duyệt. |
+| **CIFAR-10** | Huấn luyện Small CNN/ResNet-18 bằng PyTorch, split tái lập, checkpoint/resume, evaluation, prediction và metadata checkpoint trong dashboard. |
+| **Kiểm tra tự động** | Lint, typecheck, unit test, build, regression training trên CPU và audit dependency bằng GitHub Actions. |
 
 ## Bắt đầu nhanh
 
 ### Yêu cầu
 
-- **Python 3.11+**
-- **[uv](https://docs.astral.sh/uv/)**: trình quản lý gói Python. Cài bằng `pip install uv` hoặc xem [hướng dẫn chính thức](https://docs.astral.sh/uv/getting-started/installation/).
-- **Node.js 20.19+** (hoặc 22.12+) và **pnpm** (`npm install -g pnpm@10`), nếu làm frontend.
+- Git, **Python 3.11+** và **uv**.
+- **Node.js 20.19+ hoặc 22.12+**, **pnpm 10**.
+- Trình duyệt hỗ trợ WebGL 2.0.
+- Ollama và PyTorch chỉ cần cho các luồng AI local hoặc huấn luyện CIFAR-10 tương ứng.
 
-> [!TIP]
-> Trên Windows, nếu cài bằng `pip install --user uv` mà gõ `uv` báo "not found", hãy thêm thư mục `%APPDATA%\Python\Python3xx\Scripts` vào biến môi trường `PATH`.
+Luồng demo bên dưới dùng dữ liệu giả lập và provider `fake` mặc định, không cần GPU hoặc API key. Lần cài dependency đầu tiên cần kết nối mạng.
 
-### Backend
+### 1. Clone repository
+
+```bash
+git clone https://github.com/ngthdanh05/3d-mlops-copilot-platform.git
+cd 3d-mlops-copilot-platform
+```
+
+### 2. Khởi động backend
+
+Trong terminal thứ nhất, từ thư mục gốc dự án:
 
 ```bash
 cd backend
-uv sync                                  # tạo .venv và cài thư viện (kể cả công cụ dev)
-cp .env.example .env                     # tuỳ chọn, không có .env thì dùng mặc định
-uv run uvicorn app.main:app --reload     # chạy server
+uv sync --locked
+uv run python -m app.utils.seed_data
+uv run uvicorn app.main:app --reload
 ```
 
-Khi khởi động, server tự tạo file `backend/mlops.db` cùng các bảng.
+Lệnh seed tạo hai experiment `mock-mnist-cnn` và `mock-cifar10-resnet18`, mỗi experiment có 15 run. Dữ liệu được lưu trong `backend/mlops.db`; chạy lại sẽ bỏ qua experiment mẫu đã tồn tại.
+
+Bạn có thể dùng cấu hình mặc định mà không tạo `.env`. Để tùy chỉnh, sao chép [backend/.env.example](backend/.env.example) thành `backend/.env` rồi sửa theo mục [Cấu hình](#cấu-hình). Trong PowerShell, dùng `Copy-Item .env.example .env` khi đang ở `backend/`.
+
+### 3. Khởi động frontend
+
+Trong terminal thứ hai, từ thư mục gốc dự án:
+
+```bash
+cd frontend
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
 | Địa chỉ | Nội dung |
 |---|---|
-| http://localhost:8000/docs | Swagger UI, thử trực tiếp mọi API trên trình duyệt |
-| http://localhost:8000/redoc | Tài liệu API dạng ReDoc |
-| http://localhost:8000/api/health | Kiểm tra server sống: `{"status": "ok"}` |
+| [localhost:5173](http://localhost:5173) | Dashboard 3D |
+| [localhost:8000/docs](http://localhost:8000/docs) | Swagger UI để khám phá và thử API |
+| [localhost:8000/redoc](http://localhost:8000/redoc) | Tài liệu ReDoc |
+| [localhost:8000/api/health](http://localhost:8000/api/health) | Health check, trả về `{"status":"ok"}` |
 
-### Frontend
+Vite chuyển request `/api` tới backend ở `http://localhost:8000`. Giữ cả hai terminal đang chạy khi sử dụng dashboard.
+
+### 4. Khám phá dashboard
+
+1. Chọn experiment `mock-mnist-cnn` ở sidebar.
+2. Xoay/zoom đồ thị và chọn một run để xem siêu tham số cùng metrics.
+3. Thay đổi trục hoặc lọc run theo trạng thái, accuracy và tên.
+4. Hỏi **“Run nào tốt nhất?”** để thử Copilot giả lập.
+
+Provider `fake` chỉ hỗ trợ luồng tìm run tốt nhất và đánh dấu câu trả lời là giả lập. Để so sánh hoặc phân tích bằng AI, cấu hình Ollama hoặc Gemini ở phần dưới. Các experiment `mock-*` chứa dữ liệu giả lập, không phải kết quả huấn luyện thật.
+
+## Sử dụng
+
+### Bật AI local với Ollama
+
+Chuẩn bị runtime Ollama và model theo [hướng dẫn CIFAR-10/local](docs/CIFAR10-LOCAL-RUNBOOK.md), sau đó đặt trong `backend/.env`:
+
+```dotenv
+LLM_PROVIDER=ollama
+OFFLINE=true
+LLM_BASE_URL=http://127.0.0.1:11434
+LLM_MODEL=qwen3:4b-instruct-2507-q4_K_M
+LLM_TIMEOUT=120
+LLM_CONTEXT=12288
+```
+
+Khởi chạy Ollama với model đã tải và khởi động lại backend để nhận cấu hình mới. Endpoint `/api/copilot/status` cho biết provider, model và trạng thái sẵn sàng.
+
+Ví dụ câu hỏi:
+
+- “Run nào có val_accuracy cao nhất?”
+- “So sánh run-001 với run-002.”
+- “run-002 có dấu hiệu overfitting không?”
+
+Copilot lấy số liệu qua các công cụ backend và trả về hành động điều khiển giao diện. Việc phân tích overfitting được tính từ metrics train/validation; AI không trực tiếp ghi vào database.
+
+### Huấn luyện CIFAR-10
+
+Backend phải đang chạy để nhận tracking. Các lệnh sau thực hiện từ `backend/`; bước chuẩn bị sẽ tải dependency và dataset:
 
 ```bash
-cd frontend
-pnpm install
-pnpm dev          # mở http://localhost:5173
+uv sync --locked --group training
+uv run --locked --group training python scripts/prepare_cifar10.py
+uv run --locked --group training python scripts/train_cifar10.py --device cuda --epochs 4
 ```
 
-Frontend chuyển các request `/api` tới `http://localhost:8000` qua proxy của Vite. Hãy chạy backend trước.
+Dùng `--device cpu` nếu muốn chạy trên CPU. Pipeline hỗ trợ `small-cnn` và `resnet18`; checkpoint cùng báo cáo nằm trong `backend/artifacts/cifar10/<local-id>/`. Dataset và model không được lưu trong Git.
 
-> [!TIP]
-> Trên Windows, nếu gõ `pnpm` báo "not recognized", hãy thêm thư mục `%APPDATA%\npm` vào biến môi trường `PATH`.
+`best.pt` được chọn theo validation accuracy, còn `last.pt` dùng để khôi phục huấn luyện. Metrics `final_*` trong API thuộc epoch cuối đã ghi, có thể khác metrics của checkpoint tốt nhất.
 
-> [!WARNING]
-> Dự án dùng React 18 nên phải giữ `@react-three/fiber` ở v8 và `@react-three/drei` ở v9. Bản mới hơn của hai thư viện này yêu cầu React 19.
+Xem [runbook](docs/CIFAR10-LOCAL-RUNBOOK.md) để thực hiện resume, sweep, đánh giá test, dự đoán ảnh và vận hành offline sau khi chuẩn bị tài nguyên.
 
----
+### Ghi log từ script của bạn
 
-## Tạo dữ liệu mẫu
-
-### Cách 1: dữ liệu giả lập (nhanh, không cần server)
-
-```bash
-cd backend
-uv run python -m app.utils.seed_data
-```
-
-Tạo 2 experiment là `mock-mnist-cnn` và `mock-cifar10-resnet18`, mỗi cái 15 run với đường cong học tập trông như thật: có run tốt, run overfit, run bị phân kỳ rồi lỗi, run đang chạy dở.
-
-> [!NOTE]
-> Đây là dữ liệu **giả lập**, dùng để phát triển giao diện và test. Tiền tố `mock-` nghĩa là không có mô hình nào được huấn luyện thật. Dữ liệu huấn luyện thật có tiền tố `real-`.
-
-| Tham số | Ý nghĩa |
-|---|---|
-| `--runs-per-experiment N` | Số run mỗi experiment (mặc định 15) |
-| `--seed N` | Hạt giống ngẫu nhiên, cùng seed cho cùng dữ liệu (mặc định 42) |
-| `--reset` | Xoá và tạo lại 2 experiment mẫu. Dữ liệu khác không bị ảnh hưởng. |
-
-Chạy lại nhiều lần không bị trùng: experiment mẫu đã có sẽ được bỏ qua.
-
-### Cách 2: huấn luyện thật (cần server đang chạy)
-
-Bộ thử chuẩn cho demo là 35 run trên MNIST, gồm 30 cấu hình ngẫu nhiên và 5 cấu hình cố ý xấu. Cùng `--seed` sẽ cho cùng bộ cấu hình, nên tái tạo được dữ liệu trên máy khác mà không cần chép file database. Lệnh này tự bỏ qua nếu experiment đã có run.
-
-```bash
-uv run python scripts/train_mnist_demo.py --dataset mnist --random-search 30
-```
-
-Một bộ thử nhỏ hơn, chạy nhanh:
-
-```bash
-cd backend
-uv run python scripts/train_mnist_demo.py --sweep
-```
-
-Huấn luyện mạng nơ-ron nhiều lớp (`MLPClassifier` của scikit-learn) với 9 bộ siêu tham số khác nhau, mỗi epoch gửi kết quả lên API. Mặc định dùng **tập ảnh chữ số 8×8 có sẵn trong scikit-learn** (không cần tải), không phải MNIST gốc 28×28.
-
-```bash
-# Một run với siêu tham số tự chọn
-uv run python scripts/train_mnist_demo.py --lr 0.001 --batch-size 32 --epochs 15 --hidden-layers 128,64
-
-# Dùng MNIST thật (tải ~15 MB từ OpenML ở lần đầu)
-uv run python scripts/train_mnist_demo.py --dataset mnist --mnist-samples 10000 --sweep
-
-# Xem toàn bộ tham số
-uv run python scripts/train_mnist_demo.py --help
-```
-
----
-
-## Tài liệu API
-
-Tất cả endpoint có tiền tố `/api`. Tài liệu đầy đủ, có thể bấm thử, nằm ở **`/docs`**.
-
-| Method | Endpoint | Chức năng | Mã trả về |
-|---|---|---|---|
-| `GET` | `/api/health` | Kiểm tra server | 200 |
-| `POST` | `/api/experiments` | Tạo experiment | 201 · 409 trùng tên |
-| `GET` | `/api/experiments` | Danh sách experiment | 200 |
-| `GET` | `/api/experiments/{id}` | Chi tiết experiment | 200 · 404 |
-| `DELETE` | `/api/experiments/{id}` | Xoá experiment cùng các run và metrics của nó | 204 · 404 |
-| `POST` | `/api/runs` | Tạo run (trạng thái ban đầu `running`) | 201 · 404 · 409 trùng tên run |
-| `GET` | `/api/runs` | Danh sách run kèm chỉ số epoch cuối. Thêm `?experiment_id=X` để lọc, bỏ trống để lấy mọi experiment | 200 · 404 |
-| `GET` | `/api/runs/{id}` | Chi tiết run kèm toàn bộ metrics theo epoch | 200 · 404 |
-| `PUT` | `/api/runs/{id}` | Cập nhật trạng thái: `completed` / `failed` / `running` | 200 · 404 · 409 |
-| `DELETE` | `/api/runs/{id}` | Xoá run cùng metrics của nó | 204 · 404 |
-| `POST` | `/api/runs/{id}/metrics` | Ghi metrics cho 1 epoch | 201 · 404 · 409 epoch đã ghi |
-| `POST` | `/api/copilot/chat` | Hỏi trợ lý AI, trả về `message` + `actions` | 200 · 422 |
-| `POST` | `/api/copilot/chat/stream` | Như trên nhưng stream câu trả lời bằng SSE: các sự kiện `delta`, `reset`, rồi `done` chứa `message` + `actions` | 200 · 422 |
-
-Dữ liệu gửi lên sai định dạng luôn trả về **422**, kèm thông báo chỉ rõ field nào sai.
-
-### Ví dụ với `curl`
-
-```bash
-# 1. Tạo experiment
-curl -X POST localhost:8000/api/experiments \
-  -H "Content-Type: application/json" \
-  -d '{"name": "MNIST-CNN-v1", "description": "CNN baseline on MNIST"}'
-
-# 2. Tạo run với siêu tham số
-curl -X POST localhost:8000/api/runs \
-  -H "Content-Type: application/json" \
-  -d '{"experiment_id": 1, "run_name": "run-001", "hyperparams": {"learning_rate": 0.001, "batch_size": 32, "epochs": 10}}'
-
-# 3. Ghi metrics của epoch 1
-curl -X POST localhost:8000/api/runs/1/metrics \
-  -H "Content-Type: application/json" \
-  -d '{"epoch": 1, "accuracy": 0.91, "loss": 0.31, "val_accuracy": 0.89, "val_loss": 0.35}'
-
-# 4. Đánh dấu hoàn thành (finished_at tự điền thời điểm hiện tại, UTC)
-curl -X PUT localhost:8000/api/runs/1 \
-  -H "Content-Type: application/json" \
-  -d '{"status": "completed"}'
-
-# 5. Xem danh sách run
-curl "localhost:8000/api/runs?experiment_id=1"
-```
-
-> [!TIP]
-> Các lệnh trên dùng cú pháp bash (Linux, macOS, Git Bash, WSL). Trên Windows, nếu chuỗi JSON có chữ tiếng Việt có dấu thì terminal có thể gửi sai bảng mã và API trả lỗi 400. Khi đó hãy thử trực tiếp trên Swagger UI (`/docs`) hoặc dùng client Python ở phần dưới.
-
-<details>
-<summary>Ví dụ kết quả của <code>GET /api/runs</code></summary>
-
-```json
-[
-  {
-    "id": 1,
-    "experiment_id": 1,
-    "run_name": "run-001",
-    "status": "completed",
-    "hyperparams": { "learning_rate": 0.001, "batch_size": 32, "epochs": 10 },
-    "created_at": "2026-11-07T08:27:00Z",
-    "finished_at": "2026-11-07T08:29:41Z",
-    "final_epoch": 10,
-    "final_accuracy": 0.9812,
-    "final_loss": 0.106,
-    "final_val_accuracy": 0.9644,
-    "final_val_loss": 0.139
-  }
-]
-```
-
-</details>
-
-### Quy tắc kiểm tra siêu tham số
-
-`hyperparams` là một object JSON tự do: bạn đặt key gì cũng được. Riêng các key quen thuộc sau bị kiểm tra:
-
-| Key | Điều kiện |
-|---|---|
-| `learning_rate` hoặc `lr` | số > 0 |
-| `epochs`, `batch_size` | số nguyên ≥ 1 |
-
-> [!TIP]
-> Để các run hiển thị đúng chỗ trong không gian 3D, hãy dùng **tên key thống nhất**: `learning_rate` (không dùng `lr`), `batch_size`, `epochs`, `hidden_layers`.
-
----
-
-## Ghi log từ script huấn luyện của bạn
-
-Dùng client có sẵn trong `backend/scripts/log_to_api.py`. Client chỉ cần thư viện `httpx`: đặt script của bạn trong `backend/scripts/`, hoặc chép file `log_to_api.py` sang project của bạn.
+Client có sẵn tại [backend/scripts/log_to_api.py](backend/scripts/log_to_api.py). Ví dụ trong một script Python chạy từ `backend/`, khi API đã khởi động:
 
 ```python
-from log_to_api import TrackingClient
+from scripts.log_to_api import TrackingClient
 
 with TrackingClient("http://localhost:8000") as client:
-    exp = client.ensure_experiment("My-Experiment", "Mô tả")
+    experiment = client.ensure_experiment("my-experiment")
+    params = {"learning_rate": 0.001, "batch_size": 32, "epochs": 1}
 
-    hyperparams = {"learning_rate": 1e-3, "batch_size": 64, "epochs": 20}
-    with client.start_run(exp["id"], hyperparams) as run:  # tự đặt tên run-001, run-002, ...
-        for epoch in range(1, 21):
-            acc, loss, val_acc, val_loss = train_one_epoch()  # code huấn luyện của bạn
-            run.log(epoch, accuracy=acc, loss=loss, val_accuracy=val_acc, val_loss=val_loss)
-    # Ra khỏi khối `with`: run tự chuyển sang "completed".
-    # Nếu có lỗi (exception) hoặc loss = NaN: run tự chuyển sang "failed".
+    with client.start_run(experiment["id"], params) as run:
+        # Thay các giá trị minh họa bằng metrics từ vòng lặp huấn luyện.
+        run.log(1, accuracy=0.91, loss=0.31, val_accuracy=0.88, val_loss=0.36)
 ```
 
----
+Run chuyển sang `completed` khi thoát khối `with` thành công, hoặc `failed` nếu có exception. Dùng các key siêu tham số thống nhất như `learning_rate`, `batch_size`, `epochs` để thuận tiện chọn trục 3D.
+
+Muốn thử huấn luyện nhẹ bằng scikit-learn với tập chữ số có sẵn, chạy `uv run python scripts/train_mnist_demo.py --sweep` trong `backend/`.
 
 ## Cấu hình
 
-Đặt trong `backend/.env`. Xem mẫu ở `backend/.env.example`.
+Backend đọc biến môi trường và file `backend/.env`. Danh sách đầy đủ nằm trong [file mẫu](backend/.env.example) và [app/config.py](backend/app/config.py).
 
-| Biến | Mặc định | Ý nghĩa |
+| Biến | Mặc định trong code | Ý nghĩa |
 |---|---|---|
-| `DEBUG` | `false` | In câu lệnh SQL ra console |
-| `DATABASE_URL` | file `backend/mlops.db` | Chuỗi kết nối, ví dụ `sqlite+aiosqlite:///./mlops.db` |
-| `CORS_ORIGINS` | `localhost:5173`, `localhost:3000` | Các địa chỉ frontend được phép gọi API (dạng JSON list) |
-| `LLM_PROVIDER` | `fake` | `fake`, `ollama`, hoặc `gemini`; không tự fallback |
-| `OFFLINE` | `true` | Từ chối Gemini khi offline |
-| `LLM_BASE_URL` | `http://127.0.0.1:11434` | Ollama, chỉ chấp nhận HTTP loopback |
-| `LLM_API_KEY` | — | Chỉ dùng khi chủ động chọn Gemini cloud |
-| `LLM_MODEL` | — | Ollama cần model đã cache, đã thử `qwen3:4b-instruct-2507-q4_K_M`; Gemini để trống dùng model mặc định |
-| `LLM_TIMEOUT` / `LLM_CONTEXT` | `120` / `12288` | Timeout giây và context budget local |
+| `DATABASE_URL` | SQLite tại `backend/mlops.db` | Chuỗi kết nối database async. |
+| `DEBUG` | `false` | Bật log câu lệnh SQL. |
+| `CORS_ORIGINS` | localhost/127.0.0.1 trên cổng 5173 và 3000 | Danh sách origin frontend, khai báo dưới dạng JSON array. |
+| `LLM_PROVIDER` | `fake` | Chọn `fake`, `ollama` hoặc `gemini`. |
+| `OFFLINE` | `true` | Chặn sử dụng provider Gemini. |
+| `LLM_BASE_URL` | `http://127.0.0.1:11434` | Địa chỉ Ollama; chỉ chấp nhận HTTP loopback. |
+| `LLM_MODEL` | Không đặt | Ollama cần model đã tải; file `.env.example` điền sẵn model Qwen dùng cho local. |
+| `LLM_API_KEY` | Không đặt | API key khi chọn Gemini. |
+| `LLM_TIMEOUT` / `LLM_CONTEXT` | `120` / `12288` | Timeout request (giây) và ngân sách context local. |
 
-> [!CAUTION]
-> Không commit file `.env` (đã có trong `.gitignore`).
+Gemini chỉ được bật khi đặt `LLM_PROVIDER=gemini`, `OFFLINE=false` và cung cấp `LLM_API_KEY`. Chọn `LLM_MODEL` phù hợp với provider; ứng dụng không tự chuyển provider khi xảy ra lỗi. API key luôn nằm ở backend; không commit `.env` vào Git.
 
----
+`OFFLINE=true` kiểm soát lựa chọn provider, không thay thế firewall. Hướng dẫn chặn kết nối ngoài loopback cho tiến trình Python và chuẩn bị tài nguyên offline nằm trong [runbook](docs/CIFAR10-LOCAL-RUNBOOK.md).
 
-## Kiểm thử
+## Kiến trúc
 
-```bash
-cd backend
-
-uv run pytest                 # chạy toàn bộ test
-uv run pytest --cov           # kèm báo cáo độ phủ code
-uv run ruff check .           # kiểm tra lỗi code
-uv run ruff format .          # định dạng code
+```mermaid
+flowchart LR
+    Training[Script huấn luyện] -->|Metrics theo epoch| API[FastAPI]
+    UI[React + React Three Fiber] <-->|REST / SSE| API
+    API <--> DB[(SQLite)]
+    API <--> Copilot[Copilot engine + tools]
+    Copilot --> LLM[Ollama local / Gemini cloud / Fake]
+    Training --> Artifacts[Checkpoint và báo cáo local]
 ```
 
-Mỗi bài test dùng một database SQLite **trong bộ nhớ** riêng, nên không ảnh hưởng tới `mlops.db` của bạn.
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, React Three Fiber/drei và Zustand. Đồ thị 3D, Inspector và chat dùng chung trạng thái lựa chọn run.
+- **Backend:** FastAPI, Pydantic, SQLAlchemy async và aiosqlite. Các router gọi service layer để quản lý experiment, run và metrics.
+- **Copilot:** adapter provider, vòng lặp tool calling và các công cụ truy vấn/điều khiển UI. Lời gọi LLM đi qua backend.
+- **Training:** PyTorch/Torchvision cho CIFAR-10; scikit-learn cho demo chữ số. Checkpoint lưu trên filesystem, metadata được liên kết với run.
 
-```bash
-cd frontend
+Mô hình dữ liệu chính: `Experiment → Run → Metric`. Xem [sơ đồ luồng dữ liệu và bài thực hành](docs/DATA-FLOW-AND-TEST-WALKTHROUGH.md) để theo dõi từ script huấn luyện đến database, API, UI và Copilot.
 
-pnpm test                     # chạy toàn bộ test
-pnpm test:coverage            # kèm báo cáo độ phủ, yêu cầu src/utils đạt ≥ 70%
+## Tài liệu API
+
+Tài liệu tương tác đầy đủ có tại [Swagger UI](http://localhost:8000/docs) khi backend đang chạy.
+
+| Nhóm | Endpoint chính | Chức năng |
+|---|---|---|
+| Health | `GET /api/health` | Kiểm tra backend. |
+| Experiments | `/api/experiments`, `/api/experiments/{id}` | Tạo, liệt kê, xem và xóa experiment. |
+| Runs | `/api/runs`, `/api/runs/{id}` | Tạo, liệt kê, xem, cập nhật trạng thái và xóa run. |
+| Metrics | `POST /api/runs/{id}/metrics` | Ghi metrics cho một epoch. |
+| Copilot | `GET /api/copilot/status` | Kiểm tra provider và model local. |
+| Chat | `POST /api/copilot/chat` | Nhận câu trả lời và các UI action. |
+| Streaming | `POST /api/copilot/chat/stream` | Nhận câu trả lời qua Server-Sent Events. |
+
+`GET /api/runs?experiment_id=<id>` lọc theo experiment; chi tiết run chứa timeline metrics. API kiểm tra dữ liệu đầu vào và trả về `404` khi không tìm thấy, `409` khi xung đột, `422` khi dữ liệu không hợp lệ.
+
+## Cấu trúc thư mục
+
+```text
+3d-mlops-copilot-platform/
+├── .github/workflows/     # CI và audit dependency
+├── backend/
+│   ├── app/               # API, schemas, models, tracking và Copilot
+│   ├── scripts/           # Training, tracking client, CLI và smoke test
+│   ├── training/          # Dataset, models, checkpoint và training engine
+│   ├── tests/             # Pytest và regression tests
+│   ├── .env.example       # Cấu hình mẫu
+│   ├── pyproject.toml
+│   └── uv.lock
+├── frontend/
+│   ├── src/               # Components, hooks, stores và API client
+│   ├── scripts/           # Browser smoke test và benchmark
+│   └── package.json
+├── docs/                  # Runbook, demo, thiết kế và báo cáo
+├── CONTRIBUTING.md
+└── README.md
 ```
 
-**Smoke test end-to-end** khởi động backend và frontend trên cổng riêng với database tạm, seed dữ liệu, gọi API, rồi mở Chrome hoặc Edge ở chế độ ẩn để kiểm tra: không gian 3D tải được, click node hiện Inspector, hỏi AI thì run được làm nổi bật. Có thể chạy song song với server đang dùng.
+## Kiểm thử và CI
+
+Backend, từ `backend/`:
 
 ```bash
-cd backend
-
-uv run python scripts/smoke_test.py               # dùng LLM giả lập, không tốn lượt gọi
-uv run python scripts/smoke_test.py --no-browser  # chỉ kiểm tra API và server
-uv run python scripts/benchmark.py --real-llm     # đo FPS, API, AI và ghi docs/performance.md
+uv run ruff format --check .
+uv run ruff check .
+uv run pytest --cov
 ```
 
-**CI (GitHub Actions)** chạy tự động cho mỗi Pull Request vào `main`:
+Các test training cần dependency tùy chọn; dùng `uv run --group training pytest tests/test_cifar_training.py tests/test_cifar_recovery.py` để chạy regression với fixture tổng hợp, không tải dataset hay trọng số pretrained.
 
-| Job | Kiểm tra |
+Frontend, từ `frontend/`:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test:coverage
+pnpm build
+```
+
+Smoke test, sau khi đã cài dependency cho cả hai phần, từ `backend/`:
+
+```bash
+uv run python scripts/smoke_test.py
+```
+
+Smoke test mở backend/frontend trên cổng riêng và dùng database tạm. Cần Chrome hoặc Edge cho phần trình duyệt; thêm `--no-browser` để chỉ kiểm tra API/server.
+
+| Workflow | Nội dung | Khi chạy |
+|---|---|---|
+| [CI](.github/workflows/ci.yml) | Backend lint/test/coverage, training regression trên CPU; frontend lint/typecheck/test/build. | PR vào `main`, push lên `main`, chạy thủ công. |
+| [Security audit](.github/workflows/security-audit.yml) | `pip-audit` cho dependency Python đã khóa, gồm nhóm training/dev; `pnpm audit` cho frontend. | PR vào `main`, push `main`, thứ Hai 09:00 giờ Bangkok, chạy thủ công. |
+
+Python audit thất bại khi có lỗ hổng đã biết hoặc package không audit được; frontend audit thất bại ở mức high/critical. Audit báo cáo vấn đề và không tự sửa dependency.
+
+## Tài liệu dự án
+
+| Tài liệu | Nội dung |
 |---|---|
-| `backend` | `ruff format --check`, `ruff check`, `pytest --cov` |
-| `frontend` | `lint`, `typecheck`, `test:coverage`, `build` (tự bỏ qua khi chưa có `frontend/package.json`) |
+| [CIFAR-10 và Copilot local](docs/CIFAR10-LOCAL-RUNBOOK.md) | Chuẩn bị máy, model, dataset; train/resume, evaluate/predict và chạy offline trên Windows. |
+| [Luồng dữ liệu và thực hành](docs/DATA-FLOW-AND-TEST-WALKTHROUGH.md) | Đọc code theo từng chặng và kiểm chứng API, database, giao diện, AI. |
+| [Báo cáo triển khai CIFAR-10](docs/CIFAR10-IMPLEMENTATION-REPORT.md) | Kết quả training, benchmark và phạm vi kiểm chứng tại thời điểm đo. |
+| [Kịch bản demo](docs/DEMO.md) | Các bước trình diễn dashboard và Copilot. |
+| [Hiệu năng](docs/performance.md) | Số đo và điều kiện benchmark. |
+| [Kế hoạch dự án](docs/PLAN.md) | Thiết kế và lộ trình ban đầu. |
+| [Kế hoạch CIFAR-10/local AI](docs/PLAN-CIFAR10-LOCAL-AI.md) | Các hạng mục triển khai pipeline huấn luyện và AI local. |
 
----
+## Phạm vi và giới hạn
 
-## Automated security audit
+- Đây là bản **Proof of Concept** cho một người dùng trên localhost; chưa có đăng nhập, phân quyền hay triển khai nhiều người dùng.
+- Metrics tracking hiện gồm `accuracy`, `loss`, `val_accuracy`, `val_loss`, tập trung vào bài toán phân loại.
+- Checkpoint và dataset được lưu cục bộ; chưa có kho artifact tập trung hay API tải model.
+- Dashboard chọn một experiment tại một thời điểm; chưa có chế độ so sánh nhiều experiment hoặc giảm chiều PCA.
+- Vận hành local cần tải sẵn dependency, dataset và model. Tài nguyên RAM/VRAM phụ thuộc cấu hình training và LLM; xem runbook trước khi chạy đồng thời.
+- Kết quả accuracy và hiệu năng trong các báo cáo gắn với phiên bản, thiết bị và dữ liệu tại thời điểm đo.
 
-[`Security audit`](.github/workflows/security-audit.yml) runs on pull requests into
-`main`, pushes to `main`, every Monday at 02:00 UTC (09:00 Asia/Bangkok), and manual
-dispatch. The scheduled trigger starts after the workflow is merged into `main`.
-Existing CI continues to run lint, tests, type checks, and builds on pull requests.
+## Đóng góp
 
-- Python: `pip-audit` checks the locked runtime, development, and training
-  dependencies. CUDA suffixes on torch/torchvision versions are removed only in the
-  temporary audit input to match upstream PyPI advisories; the lockfile is unchanged.
-  Any known vulnerability or unauditable package fails the job.
-- Frontend: `pnpm audit --audit-level high` checks production and development
-  dependencies; high and critical findings fail the job. Lower severities remain
-  visible in the log.
-- These jobs report findings and do not automatically update dependencies.
-  Training uses `torch==2.14.1` with `torchvision==0.29.1`, replacing the vulnerable
-  PyTorch 2.7.1 pin. CUDA 12.6 builds are used locally on Windows/Linux; CI runs the
-  matching CPU builds. No advisories are suppressed.
-
-## Demo
-
-Kịch bản demo từng bước nằm ở [`docs/DEMO.md`](docs/DEMO.md).
-
-![AI trả lời, làm nổi bật run tốt nhất và bay camera tới](docs/screenshots/03-copilot.png)
-
----
-
-## Lộ trình phát triển
-
-Chi tiết từng task: [`docs/PLAN.md`](docs/PLAN.md).
-
-| Phase | Nội dung | Trạng thái |
-|---|---|---|
-| 1 | **Nền tảng Backend & MLOps:** API tracking, database, validation, script demo, dữ liệu mẫu, kiểm thử | ✅ Xong |
-| 2 | **Không gian 3D:** khởi tạo frontend, layout 3 khung, node 3D theo [thiết kế](#thiết-kế-không-gian-3d), chọn trục, click/hover, Inspector Panel, camera bay tới node. Backend bổ sung `DELETE` | 🚧 Còn biểu đồ theo epoch |
-| 3 | **AI Copilot:** kết nối LLM, các tool truy vấn và tool điều khiển giao diện theo [thiết kế](#thiết-kế-trợ-lý-ai), bộ câu hỏi kiểm thử độ chính xác | ✅ Xong |
-| 4 | **Đồng bộ & hoàn thiện:** đồng bộ 3 khung, sidebar, tối ưu hiệu năng (≥ 200 node @ 60 fps), dark mode | ✅ Xong |
-| 5 | **Kiểm thử & demo:** smoke test end-to-end, benchmark, tài liệu demo | ✅ Xong |
-
----
-
-## Giới hạn của bản PoC
-
-- Chưa có đăng nhập, chỉ một người dùng, chạy trên localhost.
-- SQLite phù hợp cho thử nghiệm. Thiết kế cho tối đa khoảng 500 run và 50 epoch mỗi run.
-- **Metrics cố định 4 loại** (`accuracy`, `loss`, `val_accuracy`, `val_loss`), phù hợp bài toán **phân loại**. Chưa hỗ trợ metric khác như F1, MSE, R².
-- Chưa lưu file model (artifact).
-- Cần trình duyệt hỗ trợ WebGL 2.0 (Chrome, Edge, Firefox).
-
----
-
-## Quy ước phát triển
-
-Xem [CONTRIBUTING.md](CONTRIBUTING.md) cho quy ước branch, commit, code và các lệnh chạy, build/test.
+Xem [CONTRIBUTING.md](CONTRIBUTING.md) để thiết lập môi trường, đặt tên branch/commit và chạy kiểm tra trước khi mở pull request. Báo lỗi hoặc đề xuất cải tiến tại [GitHub Issues](https://github.com/ngthdanh05/3d-mlops-copilot-platform/issues).
