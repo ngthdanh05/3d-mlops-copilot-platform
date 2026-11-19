@@ -1,0 +1,68 @@
+name: Security audit
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-audit:
+    name: Python dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.11'
+      - name: Export locked dependencies including training and development
+        run: |
+          uv export --frozen --all-groups --no-hashes --no-emit-project --output-file requirements-audit.txt
+          # PyPI advisories use the upstream version, without the CUDA build suffix.
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          path = Path('requirements-audit.txt')
+          requirements = path.read_text()
+          requirements = re.sub(
+              r'(?m)^((?:torch|torchvision)==[0-9.]+)\+cu[0-9]+(?=\s|$)',
+              r'\1',
+              requirements,
+          )
+          path.write_text(requirements)
+          PY
+      - name: Audit Python dependencies
+        run: uvx pip-audit==2.10.1 --strict --no-deps --disable-pip --requirement requirements-audit.txt
+
+  frontend-audit:
+    name: Frontend dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+      - name: Install locked dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Audit frontend dependencies
+        run: pnpm audit --audit-level high

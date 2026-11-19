@@ -119,7 +119,7 @@ export function Scene({ loadStep, hasError, isRetrying, onRetry }: SceneProps) {
   let message: string | null = null
   if (!hasError && loadStep === null) {
     if (!hasExperiment) {
-      message = 'Chưa có experiment. Chạy: uv run python -m app.utils.seed_data'
+      message = 'Chưa có experiment. Chuẩn bị CIFAR-10 rồi chạy: uv run --group training python scripts/train_cifar10.py (xem docs/CIFAR10-LOCAL-RUNBOOK.md).'
     } else if (runs.length === 0) {
       message = 'Experiment này chưa có run.'
     } else if (visibleRuns.length === 0) {

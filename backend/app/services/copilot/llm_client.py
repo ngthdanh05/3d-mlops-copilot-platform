@@ -26,6 +26,14 @@ class LLMRateLimitError(LLMError):
     """The provider's quota is used up for now."""
 
 
+class LLMContextError(LLMError):
+    """The prompt would exceed the explicitly configured local context budget."""
+
+
+class LLMLocalError(LLMError):
+    """The local runtime failed or returned an unusable reply."""
+
+
 @dataclass(frozen=True)
 class ToolDefinition:
     name: str
@@ -232,10 +240,14 @@ class GeminiLLMClient:
 
 @lru_cache
 def get_llm_client() -> LLMClient:
-    """Gemini when `LLM_API_KEY` is set, otherwise the stand-in."""
+    """Provider is explicit; a leftover cloud key never changes local operation."""
     settings = get_settings()
-    if not settings.llm_api_key:
+    if settings.llm_provider == "fake":
         return FakeLLMClient()
+    if settings.llm_provider == "ollama":
+        from app.services.copilot.ollama_client import OllamaLLMClient
+
+        return OllamaLLMClient(settings)
     client = genai.Client(
         api_key=settings.llm_api_key,
         http_options=types.HttpOptions(timeout=_GEMINI_TIMEOUT_MS),

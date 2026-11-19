@@ -263,14 +263,16 @@ def test_no_key_uses_the_stand_in(monkeypatch, fresh_client_cache):
 
 
 def test_key_selects_gemini_with_default_model(monkeypatch, fresh_client_cache):
-    use_settings(monkeypatch, llm_api_key="k", llm_model="")
+    use_settings(monkeypatch, llm_api_key="k", llm_model="", llm_provider="gemini", offline=False)
     selected = get_llm_client()
     assert isinstance(selected, GeminiLLMClient)
     assert selected._model == llm_client.DEFAULT_GEMINI_MODEL
 
 
 def test_configured_model_is_used(monkeypatch, fresh_client_cache):
-    use_settings(monkeypatch, llm_api_key="k", llm_model="other")
+    use_settings(
+        monkeypatch, llm_api_key="k", llm_model="other", llm_provider="gemini", offline=False
+    )
     selected = get_llm_client()
     assert isinstance(selected, GeminiLLMClient)
     assert selected._model == "other"

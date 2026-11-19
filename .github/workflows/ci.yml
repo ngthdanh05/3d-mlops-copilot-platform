@@ -47,6 +47,12 @@ jobs:
       - name: Pytest + coverage
         run: uv run pytest --cov --cov-report=term-missing
 
+      - name: CPU training regression (synthetic fixtures, no dataset or LLM downloads)
+        run: |
+          uv pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cpu
+          uv pip install psutil==7.2.2
+          .venv/bin/python -m pytest tests/test_cifar_training.py tests/test_cifar_recovery.py
+
   # ------------------------------------------------------------------
   # 2. Frontend: lint, typecheck, test, build
   #    Tự bỏ qua cho đến khi frontend/package.json tồn tại (Phase 2).

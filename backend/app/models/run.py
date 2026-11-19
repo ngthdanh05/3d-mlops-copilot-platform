@@ -54,3 +54,7 @@ class Run(Base):
 
     def __repr__(self) -> str:
         return f"<Run id={self.id} name={self.run_name!r} status={self.status.value}>"
+
+    @property
+    def artifacts(self) -> dict[str, Any] | None:
+        return self.hyperparams.get("artifacts")

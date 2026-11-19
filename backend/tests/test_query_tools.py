@@ -165,7 +165,7 @@ async def test_runs_found_by_name_can_be_compared_in_the_same_chat(session):
 async def test_get_run_returns_every_epoch_of_a_seeded_run(session):
     run = (await seeded_runs(session))[0]
 
-    result = await run_tool(session, "get_run", run_id=run.id)
+    result = await run_tool(session, "get_run", run_id=run.id, max_epochs=100)
 
     assert result["run_name"] == run.run_name
     assert result["status"] == run.status.value
@@ -176,6 +176,16 @@ async def test_get_run_returns_every_epoch_of_a_seeded_run(session):
 
 async def test_get_run_not_found(session):
     assert await run_tool(session, "get_run", run_id=999) == {"error": "Run 999 not found"}
+
+
+async def test_get_run_reports_sampled_epochs_explicitly(session):
+    run_id = await add_run(session, [(0.8, 0.4, 0.7, 0.5)] * 30)
+    result = await run_tool(session, "get_run", run_id=run_id, max_epochs=5)
+    assert result["epochs_total"] == 30
+    assert result["epochs_omitted"] == 25
+    assert len(result["epochs"]) == 5
+    assert result["epochs"][0]["epoch"] == 1
+    assert result["epochs"][-1]["epoch"] == 30
 
 
 @pytest.mark.parametrize("tool", ["get_run", "detect_overfitting"])

@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -30,7 +31,7 @@ class TrackingError(RuntimeError):
 
 class TrackingClient:
     def __init__(self, base_url: str = DEFAULT_API_URL, timeout: float = 10.0) -> None:
-        self._http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout)
+        self._http = httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout, trust_env=False)
 
     # ── lifecycle ────────────────────────────────────────────────────────────
     def close(self) -> None:
@@ -122,7 +123,18 @@ class TrackingClient:
 
     # ── internals ────────────────────────────────────────────────────────────
     def _request(self, method: str, url: str, **kwargs: Any) -> Any:
-        resp = self._http.request(method, url, **kwargs)
+        # Only retry reads and idempotent updates. Metric/create POSTs are reconciled
+        # by the trainer using their natural keys after ambiguous network failures.
+        for attempt in range(3):
+            try:
+                resp = self._http.request(method, url, **kwargs)
+            except httpx.TransportError:
+                if method not in {"GET", "PUT"} or attempt == 2:
+                    raise
+            else:
+                if method not in {"GET", "PUT"} or resp.status_code < 500 or attempt == 2:
+                    break
+            time.sleep(0.25 * 2**attempt)
         if resp.is_error:
             try:
                 detail = resp.json().get("detail", resp.text)

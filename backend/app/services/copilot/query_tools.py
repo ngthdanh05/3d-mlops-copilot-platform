@@ -26,6 +26,15 @@ class NoArgs(InputSchema):
     pass
 
 
+class GetRunArgs(RunIdArgs):
+    max_epochs: int = Field(
+        default=20,
+        ge=2,
+        le=100,
+        description="Maximum epoch samples; omissions are reported explicitly",
+    )
+
+
 class FindBestRunsArgs(InputSchema):
     metric: RankingMetric = Field(default="val_accuracy", description="Metric to rank by")
     top_k: int = Field(default=1, ge=1, le=10, description="How many runs to return")
@@ -104,12 +113,21 @@ async def _find_runs_by_name(context: ToolContext, args: FindRunsByNameArgs) -> 
     }
 
 
-async def _get_run(context: ToolContext, args: RunIdArgs) -> dict[str, Any]:
+async def _get_run(context: ToolContext, args: GetRunArgs) -> dict[str, Any]:
     run = await tracking.get_run(context.db, args.run_id, with_metrics=True)
+    metrics = run.metrics
+    if len(metrics) > args.max_epochs:
+        indices = {
+            round(i * (len(metrics) - 1) / (args.max_epochs - 1)) for i in range(args.max_epochs)
+        }
+        metrics = [metric for i, metric in enumerate(metrics) if i in indices]
     return {
         **_identify(run),
         "experiment_id": run.experiment_id,
         "hyperparams": run.hyperparams,
+        "epochs_total": len(run.metrics),
+        "epochs_omitted": len(run.metrics) - len(metrics),
+        "epoch_selection": "uniform observed epochs including first/last; no interpolation",
         "epochs": [
             {
                 "epoch": m.epoch,
@@ -118,7 +136,7 @@ async def _get_run(context: ToolContext, args: RunIdArgs) -> dict[str, Any]:
                 "val_accuracy": m.val_accuracy,
                 "val_loss": m.val_loss,
             }
-            for m in run.metrics
+            for m in metrics
         ],
     }
 
@@ -289,8 +307,8 @@ QUERY_TOOLS = [
     ),
     Tool(
         name="get_run",
-        description="Get one run: status, hyperparameters and metrics of every epoch.",
-        args_model=RunIdArgs,
+        description="Get run status/hyperparameters and observed epochs; reports omitted epochs.",
+        args_model=GetRunArgs,
         handler=_get_run,
     ),
     Tool(

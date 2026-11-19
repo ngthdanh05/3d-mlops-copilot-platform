@@ -1,15 +1,39 @@
 from collections.abc import AsyncIterator
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
+from app.config import get_settings
 from app.routers.deps import DbSession
 from app.schemas.copilot import ChatRequest, ChatResponse
 from app.services.copilot import engine
 from app.services.copilot.llm_client import LLMClient, get_llm_client
 
 router = APIRouter(prefix="/api/copilot", tags=["copilot"])
+
+
+@router.get("/status")
+async def provider_status() -> dict[str, str | bool | None]:
+    settings = get_settings()
+    available = settings.llm_provider == "fake"
+    if settings.llm_provider == "ollama":
+        try:
+            async with httpx.AsyncClient(timeout=3, trust_env=False) as client:
+                response = await client.get(settings.llm_base_url.rstrip("/") + "/api/tags")
+                response.raise_for_status()
+                available = any(
+                    m.get("name") == settings.llm_model for m in response.json().get("models", [])
+                )
+        except (httpx.HTTPError, ValueError, TypeError):
+            available = False
+    return {
+        "provider": settings.llm_provider,
+        "model": settings.llm_model if settings.llm_provider != "fake" else None,
+        "available": available,
+        "offline": settings.offline,
+    }
 
 
 @router.post(

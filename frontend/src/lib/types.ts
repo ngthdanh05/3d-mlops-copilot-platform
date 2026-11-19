@@ -19,6 +19,15 @@ export interface Run {
   hyperparams: Record<string, JsonValue>
   created_at: string
   finished_at: string | null
+  artifacts?: {
+    best_epoch: number
+    best_val_accuracy: number
+    criterion: string
+    best_checkpoint: string
+    last_checkpoint: string
+    test_accuracy: number | null
+    test_loss: number | null
+  } | null
 }
 
 /** Item of `GET /api/runs`: run + metrics of its last logged epoch. */
